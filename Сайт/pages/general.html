@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pet Manager</title>
+    <style>
+        /* Общие стили */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #213568;
+            color: white;
+            font-family: Arial, sans-serif;
+            min-height: 100vh;
+            padding-bottom: 70px; /* Для футера */
+        }
+
+        /* Контент */
+        .content-section {
+            display: none;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .active-section {
+            display: block;
+        }
+
+        /* Шапка */
+        .header {
+            padding: 20px;
+            position: relative;
+        }
+
+        .back-button {
+            cursor: pointer;
+            display: none;
+            position: absolute;
+            left: 20px;
+            top: 20px;
+        }
+
+        /* Стили для футера */
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 12px 0;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .nav-button {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px 15px;
+            transition: all 0.3s ease;
+            opacity: 0.7;
+        }
+
+        .nav-button:hover {
+            opacity: 1;
+            transform: translateY(-2px);
+        }
+
+        .nav-button.active {
+            opacity: 1;
+        }
+
+        .nav-icon {
+            width: 28px;
+            height: 28px;
+            margin-bottom: 4px;
+            filter: invert(1);
+        }
+
+        .nav-button.active .nav-icon {
+            filter: invert(77%) sepia(33%) saturate(999%) hue-rotate(7deg) brightness(94%) contrast(90%);
+        }
+
+        .nav-label {
+            color: white;
+            font-size: 12px;
+        }
+
+        .nav-button.active .nav-label {
+            color: #D2C639;
+        }
+
+        @media (max-width: 480px) {
+            .nav-icon {
+                width: 24px;
+                height: 24px;
+            }
+            .nav-label {
+                font-size: 10px;
+            }
+        }
+
+        /* Стили для раздела с питомцами */
+        .pets-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .pet-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 15px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <svg class="back-button" viewBox="0 0 24 24" width="24" height="24">
+            <path fill="currentColor" d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/>
+        </svg>
+    </div>
+
+    <!-- Секция с питомцами -->
+    <section id="pets-section" class="content-section active-section">
+        <div class="pets-grid">
+            <!-- Динамическое содержимое -->
+        </div>
+    </section>
+
+    <!-- Секция с календарем -->
+    <section id="calendar-section" class="content-section">
+        <!-- Контент календаря -->
+    </section>
+
+    <!-- Секция профиля -->
+    <section id="profile-section" class="content-section">
+        <!-- Контент профиля -->
+    </section>
+
+    <!-- Футер -->
+    <div class="footer">
+        <button class="nav-button active" onclick="showSection('pets')">
+            <img src="photos/pet.svg" class="nav-icon">
+        </button>
+
+        <button class="nav-button" onclick="showSection('calendar')">
+            <img src="icons/calendar.svg" class="nav-icon" alt="Календарь">
+            <span class="nav-label">Календарь</span>
+        </button>
+
+        <button class="nav-button" onclick="showSection('profile')">
+            <img src="icons/profile.svg" class="nav-icon" alt="Профиль">
+            <span class="nav-label">Профиль</span>
+        </button>
+    </div>
+
+    <script>
+        // Навигация
+        function showSection(sectionId) {
+            // Скрыть все секции
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.classList.remove('active-section');
+            });
+
+            // Убрать активные классы с кнопок
+            document.querySelectorAll('.nav-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Показать выбранную секцию
+            document.getElementById(`${sectionId}-section`).classList.add('active-section');
+            
+            // Активировать кнопку
+            event.currentTarget.classList.add('active');
+            
+            // Показать/скрыть кнопку "Назад"
+            document.querySelector('.back-button').style.display = 
+                sectionId === 'pets' ? 'none' : 'block';
+        }
+
+        // Инициализация
+        document.querySelector('.back-button').addEventListener('click', () => {
+            showSection('pets');
+        });
+
+        // Моковые данные
+        window.onload = () => {
+            // Здесь можно добавить загрузку данных
+        };
+    </script>
+</body>
+</html>
