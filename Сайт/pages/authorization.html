@@ -103,7 +103,6 @@
             background: none;
             color: #D2C639;
             text-decoration: underline;
-            border: 2px solid #D2C639;
         }
 
         @media (max-width: 480px) {
@@ -119,7 +118,7 @@
 </head>
 <body>
     <div class="container">
-        <img src="photos/icon.png" class="logo" alt="Логотип">
+        <img src="/Сайт/photos/icon.png" class="logo" alt="Логотип">
         <h1 class="title" id="formTitle">Вход</h1>
         
         <div class="input-group visible">
@@ -137,7 +136,15 @@
     </div>
 
     <script>
-        const API_URL = 'http://localhost:8000';
+        const API_URL = 'http://127.0.0.1:8000';
+
+        async function handleResponse(response) {
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || 'Ошибка сервера');
+        }
+        return response.json();
+        }
 
         async function login() {
             const email = document.getElementById('email').value;
@@ -151,32 +158,13 @@
                     },
                     body: `username=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`
                 });
-
-                if (!response.ok) throw new Error('Ошибка авторизации');
                 
-                const data = await response.json();
+                const data = await handleResponse(response);
                 localStorage.setItem('access_token', data.access_token);
                 window.location.href = 'main.html';
             } catch (error) {
                 alert(error.message);
             }
-        }
-
-        function showRegistration() {
-            document.getElementById('formTitle').textContent = 'Регистрация';
-            
-            const nameInput = document.createElement('div');
-            nameInput.className = 'input-group';
-            nameInput.innerHTML = `<input type="text" class="input-field" placeholder="Имя" id="name">`;
-            document.querySelector('.container').insertBefore(nameInput, document.getElementById('buttonsContainer'));
-            
-            setTimeout(() => {
-                nameInput.classList.add('visible');
-                document.getElementById('buttonsContainer').innerHTML = `
-                    <button class="btn primary-btn" onclick="register()">Зарегистрироваться</button>
-                    <button class="btn secondary-btn" onclick="window.location.reload()">Назад</button>
-                `;
-            }, 10);
         }
 
         async function register() {
@@ -190,17 +178,36 @@
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ name, email, password })
+                    body: JSON.stringify({ 
+                        name: name,
+                        email: email,
+                        password: password 
+                    })
                 });
-
-                if (!response.ok) throw new Error(await response.text());
                 
+                await handleResponse(response);
                 alert('Регистрация успешна!');
                 await login();
             } catch (error) {
                 alert(error.message);
             }
         }
+                function showRegistration() {
+                    document.getElementById('formTitle').textContent = 'Регистрация';
+                    
+                    const nameInput = document.createElement('div');
+                    nameInput.className = 'input-group';
+                    nameInput.innerHTML = `<input type="text" class="input-field" placeholder="Имя" id="name">`;
+                    document.querySelector('.container').insertBefore(nameInput, document.getElementById('buttonsContainer'));
+                    
+                    setTimeout(() => {
+                        nameInput.classList.add('visible');
+                        document.getElementById('buttonsContainer').innerHTML = `
+                            <button class="btn primary-btn" onclick="register()">Зарегистрироваться</button>
+                            <button class="btn secondary-btn" onclick="window.location.reload()">Назад</button>
+                        `;
+                    }, 10);
+                }
     </script>
 </body>
 </html>
