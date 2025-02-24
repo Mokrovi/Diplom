@@ -3,31 +3,75 @@ from pydantic import BaseModel, Field
 from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey, Boolean, Table, select
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from fastapi import FastAPI, Depends, HTTPException, status, Response
-from datetime import date, datetime
+from fastapi import FastAPI, Depends, HTTPException, status, Response, Form, Request
+from fastapi.middleware.cors import CORSMiddleware
+from datetime import date, datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
+
+# API
 Base = declarative_base()
 app = FastAPI()
 engine = create_async_engine('sqlite+aiosqlite:///Diplom.db')
 new_session = async_sessionmaker(engine, expire_on_commit=False)
 
-# Конфигурация JWT
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# JWT и хэширование
 SECRET_KEY = "your-secret-key-here"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
-Base = declarative_base()
-app = FastAPI()
-engine = create_async_engine('sqlite+aiosqlite:///Diplom.db')
-new_session = async_sessionmaker(engine, expire_on_commit=False)
+class Token(BaseModel):
+    access_token: str
+    token_type: str
 
+
+class TokenData(BaseModel):
+    email: str | None = None
+
+
+def get_password_hash(password: str):
+    return pwd_context.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str):
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+async def authenticate_user(email: str, password: str, session: AsyncSession):
+    result = await session.execute(select(User).where(User.email == email))
+    user = result.scalar()
+    if not user or not verify_password(password, user.password):
+        return False
+    return user
+
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+# Сущности бд
 user_pet_association = Table(
     'user_pet_association',
     Base.metadata,
@@ -42,7 +86,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(50), unique=True, index=True)
     email = Column(String(100), unique=True, index=True)
-    password = Column(String(50))
+    password = Column(String(255))
 
     pets = relationship("Pet", secondary=user_pet_association, back_populates="users")
 
@@ -116,13 +160,11 @@ class FeedingSchedule(Base):
     pet = relationship("Pet", back_populates="feeding_schedules")
 
 
-# schemas
-
-# User schemas
+# Schemas
 class UserBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=50)
     email: str = Field(..., max_length=100)
-    password: str = Field(..., min_length=6, max_length=50)
+    password: str = Field(..., min_length=6, max_length=255)
 
 
 class UserResponse(UserBase):
@@ -132,7 +174,6 @@ class UserResponse(UserBase):
         from_attributes = True
 
 
-# Pet schemas
 class PetBase(BaseModel):
     name: str = Field(..., max_length=50)
     type: str = Field(..., max_length=50)
@@ -154,9 +195,8 @@ class PetResponse(PetBase):
         from_attributes = True
 
 
-# Health Record schemas
 class HealthRecordBase(BaseModel):
-    record_date: date = Field(default_factory=date.today)  # Переименовано в record_date
+    record_date: date = Field(default_factory=date.today)
     weight: float = Field(..., gt=0)
     description: str = Field(..., max_length=500)
 
@@ -169,7 +209,6 @@ class HealthRecordResponse(HealthRecordBase):
         from_attributes = True
 
 
-# Vaccination schemas
 class VaccinationBase(BaseModel):
     name: str = Field(..., max_length=100)
     date_administered: date
@@ -185,7 +224,6 @@ class VaccinationResponse(VaccinationBase):
         from_attributes = True
 
 
-# Reminder schemas
 class ReminderBase(BaseModel):
     description: str = Field(..., max_length=200)
     reminder_date: datetime
@@ -200,7 +238,6 @@ class ReminderResponse(ReminderBase):
         from_attributes = True
 
 
-# Feeding Schedule schemas
 class FeedingScheduleBase(BaseModel):
     feeding_time: datetime
     food_type: str = Field(..., max_length=100)
@@ -222,9 +259,31 @@ async def get_session():
 
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+PetDep = Annotated[Pet, Depends(lambda pet_id: get_pet(pet_id))]
 
 
-# Requests
+async def get_pet(pet_id: int, session: SessionDep) -> Pet:  # Поиск питомца
+    pet = await session.get(Pet, pet_id)
+    if not pet:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Питомец не найден"
+        )
+    return pet
+
+
+#Разрешения
+
+@app.options("/register")
+async def options_register():
+    return {"Allow": "POST"}
+
+
+@app.options("/token")
+async def options_token():
+    return {"Allow": "POST"}
+
+#Запросы
 
 @app.post("/rebuild_bd")
 async def rebuild_bd():
@@ -236,8 +295,8 @@ async def rebuild_bd():
 
 @app.post("/post_user", response_model=UserResponse)
 async def post_user(
-        data: UserBase,
-        session: AsyncSession = Depends(get_session)
+    data: UserBase,
+    session: SessionDep
 ):
     new_user = User(
         name=data.name,
@@ -250,43 +309,94 @@ async def post_user(
     return new_user
 
 
-# User Endpoints
-@app.post("/users", response_model=UserResponse)
-async def create_user(user: UserBase, session: AsyncSession = Depends(get_session)):
-    # Проверка уникальности email
-    existing_user = await session.execute(select(User).where(User.email == user.email))
-    if existing_user.scalar():
+# Аутентификация
+@app.post("/token", response_model=Token)
+async def login_for_access_token(
+    session: SessionDep,
+    form_data: OAuth2PasswordRequestForm = Depends()
+):
+    user = await authenticate_user(form_data.username, form_data.password, session)
+    if not user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Неверный email или пароль",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.email},
+        expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+# Регистрация
+@app.post("/register", response_model=UserResponse)
+async def register_user(user_data: UserBase, session: SessionDep):
+    existing_email = await session.execute(select(User).where(User.email == user_data.email))
+    if existing_email.scalar():
+        raise HTTPException(
+            status_code=400,
+            detail="Email уже зарегистрирован"
         )
 
-    new_user = User(**user.model_dump())
+    existing_name = await session.execute(select(User).where(User.name == user_data.name))
+    if existing_name.scalar():
+        raise HTTPException(
+            status_code=400,
+            detail="Имя пользователя уже занято"
+        )
+    if len(user_data.password) < 6:
+        raise HTTPException(
+            status_code=400,
+            detail="Пароль должен содержать минимум 6 символов"
+        )
+    hashed_password = get_password_hash(user_data.password)
+    new_user = User(
+        name=user_data.name,
+        email=user_data.email,
+        password=hashed_password,
+    )
     session.add(new_user)
     await session.commit()
     await session.refresh(new_user)
     return new_user
 
 
-@app.get("/users", response_model=List[UserResponse])
-async def get_all_users(session: AsyncSession = Depends(get_session)):
-    result = await session.execute(select(User))
-    users = result.scalars().all()
-    return users
+# Текущий пользователь
+async def get_current_user(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    session: SessionDep
+):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Неверные учетные данные",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+        token_data = TokenData(email=email)
+    except JWTError:
+        raise credentials_exception
+
+    result = await session.execute(select(User).where(User.email == token_data.email))
+    user = result.scalar()
+    if user is None:
+        raise credentials_exception
+    return user
 
 
-# Pet Endpoints
+# Питомцы
 @app.post("/pets", response_model=PetResponse)
-async def create_pet(pet: PetBase, session: AsyncSession = Depends(get_session)):
-    # Проверка существования владельца
-    owner = await session.get(User, pet.user_id)
-    if not owner:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-
-    new_pet = Pet(**pet.model_dump())
+async def create_pet(
+    pet: PetBase,
+    session: SessionDep,
+    current_user: User = Depends(get_current_user)
+):
+    new_pet = Pet(**pet.model_dump(), user_id=current_user.id)
     session.add(new_pet)
     await session.commit()
     await session.refresh(new_pet)
@@ -294,26 +404,19 @@ async def create_pet(pet: PetBase, session: AsyncSession = Depends(get_session))
 
 
 @app.get("/pets", response_model=List[PetResponse])
-async def get_all_pets(session: AsyncSession = Depends(get_session)):
+async def get_all_pets(session: SessionDep):
     result = await session.execute(select(Pet))
     pets = result.scalars().all()
     return pets
 
 
-# Health Record Endpoints
+# Записи здоровья
 @app.post("/health-records", response_model=HealthRecordResponse)
 async def create_health_record(
-        record: HealthRecordBase,
-        session: AsyncSession = Depends(get_session)
+    record: HealthRecordBase,
+    session: SessionDep,
+    pet: PetDep
 ):
-    # Проверка существования питомца
-    pet = await session.get(Pet, record.pet_id)
-    if not pet:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pet not found"
-        )
-
     new_record = HealthRecord(**record.model_dump())
     session.add(new_record)
     await session.commit()
@@ -322,36 +425,17 @@ async def create_health_record(
 
 
 @app.get("/pets/{pet_id}/health-records", response_model=List[HealthRecordResponse])
-async def get_pet_health_records(
-        pet_id: int,
-        session: AsyncSession = Depends(get_session)
-):
-    pet = await session.get(Pet, pet_id)
-    if not pet:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pet not found"
-        )
-
-    result = await session.execute(
-        select(HealthRecord).where(HealthRecord.pet_id == pet_id)
-    )
-    return result.scalars().all()
+async def get_pet_health_records(pet: PetDep, session: SessionDep):
+    return pet.health_records
 
 
-# Vaccination Endpoints
+# Вакцинация
 @app.post("/vaccinations", response_model=VaccinationResponse)
 async def create_vaccination(
-        vaccination: VaccinationBase,
-        session: AsyncSession = Depends(get_session)
+    vaccination: VaccinationBase,
+    session: SessionDep,
+    pet: PetDep
 ):
-    pet = await session.get(Pet, vaccination.pet_id)
-    if not pet:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pet not found"
-        )
-
     new_vaccination = Vaccination(**vaccination.model_dump())
     session.add(new_vaccination)
     await session.commit()
@@ -360,36 +444,17 @@ async def create_vaccination(
 
 
 @app.get("/pets/{pet_id}/vaccinations", response_model=List[VaccinationResponse])
-async def get_pet_vaccinations(
-        pet_id: int,
-        session: AsyncSession = Depends(get_session)
-):
-    pet = await session.get(Pet, pet_id)
-    if not pet:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pet not found"
-        )
-
-    result = await session.execute(
-        select(Vaccination).where(Vaccination.pet_id == pet_id)
-    )
-    return result.scalars().all()
+async def get_pet_vaccinations(pet: PetDep):
+    return pet.vaccinations
 
 
-# Reminder Endpoints
+# Напоминания
 @app.post("/reminders", response_model=ReminderResponse)
 async def create_reminder(
-        reminder: ReminderBase,
-        session: AsyncSession = Depends(get_session)
+    reminder: ReminderBase,
+    session: SessionDep,
+    pet: PetDep
 ):
-    pet = await session.get(Pet, reminder.pet_id)
-    if not pet:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pet not found"
-        )
-
     new_reminder = Reminder(**reminder.model_dump())
     session.add(new_reminder)
     await session.commit()
@@ -398,36 +463,17 @@ async def create_reminder(
 
 
 @app.get("/pets/{pet_id}/reminders", response_model=List[ReminderResponse])
-async def get_pet_reminders(
-        pet_id: int,
-        session: AsyncSession = Depends(get_session)
-):
-    pet = await session.get(Pet, pet_id)
-    if not pet:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pet not found"
-        )
-
-    result = await session.execute(
-        select(Reminder).where(Reminder.pet_id == pet_id)
-    )
-    return result.scalars().all()
+async def get_pet_reminders(pet: PetDep):
+    return pet.reminders
 
 
-# Feeding Schedule Endpoints
+# График кормления
 @app.post("/feeding-schedules", response_model=FeedingScheduleResponse)
 async def create_feeding_schedule(
-        schedule: FeedingScheduleBase,
-        session: AsyncSession = Depends(get_session)
+    schedule: FeedingScheduleBase,
+    session: SessionDep,
+    pet: PetDep
 ):
-    pet = await session.get(Pet, schedule.pet_id)
-    if not pet:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pet not found"
-        )
-
     new_schedule = FeedingSchedule(**schedule.model_dump())
     session.add(new_schedule)
     await session.commit()
@@ -436,18 +482,5 @@ async def create_feeding_schedule(
 
 
 @app.get("/pets/{pet_id}/feeding-schedules", response_model=List[FeedingScheduleResponse])
-async def get_pet_feeding_schedules(
-        pet_id: int,
-        session: AsyncSession = Depends(get_session)
-):
-    pet = await session.get(Pet, pet_id)
-    if not pet:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pet not found"
-        )
-
-    result = await session.execute(
-        select(FeedingSchedule).where(FeedingSchedule.pet_id == pet_id)
-    )
-    return result.scalars().all()
+async def get_pet_feeding_schedules(pet: PetDep):
+    return pet.feeding_schedules
