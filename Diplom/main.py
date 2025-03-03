@@ -1,34 +1,41 @@
-from typing import List, Annotated, Optional, Literal
-from pydantic import BaseModel, Field
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey, Boolean, Table, select
-from sqlalchemy.orm import relationship, declarative_base
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from fastapi import FastAPI, Depends, HTTPException, status, Response, Form, Request
-from fastapi.middleware.cors import CORSMiddleware
+from typing import List, Optional, Literal, Type
 from datetime import date, datetime, timedelta
+from pydantic import BaseModel, Field
+from sqlalchemy import (
+    Column, Integer, String, Float, Date, DateTime,
+    ForeignKey, Boolean, Table, select
+)
+from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.ext.asyncio import (
+    create_async_engine,
+    async_sessionmaker,
+    AsyncSession
+)
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from typing import Annotated
 
 
-# API
 Base = declarative_base()
 app = FastAPI()
-engine = create_async_engine('sqlite+aiosqlite:///Diplom.db')
-new_session = async_sessionmaker(engine, expire_on_commit=False)
 
+origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+engine = create_async_engine("sqlite+aiosqlite:///Diplom.db")
+new_session = async_sessionmaker(engine, expire_on_commit=False)
 
-# JWT и хэширование
-SECRET_KEY = "your-secret-key-here"
+SECRET_KEY = "5"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -41,68 +48,36 @@ class Token(BaseModel):
 
 
 class TokenData(BaseModel):
-    email: str | None = None
+    email: Optional[str] = None
 
 
-def get_password_hash(password: str):
-    return pwd_context.hash(password)
-
-
-def verify_password(plain_password: str, hashed_password: str):
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-async def authenticate_user(email: str, password: str, session: AsyncSession):
-    result = await session.execute(select(User).where(User.email == email))
-    user = result.scalar()
-    if not user or not verify_password(password, user.password):
-        return False
-    return user
-
-
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
-
-# Сущности бд
 user_pet_association = Table(
-    'user_pet_association',
+    "user_pet_association",
     Base.metadata,
-    Column('user_id', Integer, ForeignKey('users.id')),
-    Column('pet_id', Integer, ForeignKey('pets.id'))
+    Column("user_id", Integer, ForeignKey("users.id")),
+    Column("pet_id", Integer, ForeignKey("pets.id")),
 )
 
 
 class User(Base):
     __tablename__ = "users"
-
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(50), unique=True, index=True)
     email = Column(String(100), unique=True, index=True)
     password = Column(String(255))
-
     pets = relationship("Pet", secondary=user_pet_association, back_populates="users")
 
 
 class Pet(Base):
     __tablename__ = "pets"
-
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(50), index=True)
-    type = Column(String(50))  # dog, cat, etc.
+    type = Column(String(50))
     breed = Column(String(50), nullable=True)
     birth_date = Column(Date, nullable=True)
-    gender = Column(String(10))  # male/female/other
+    gender = Column(String(10))
     age = Column(Integer)
     user_id = Column(Integer, ForeignKey("users.id"))
-
     users = relationship("User", secondary=user_pet_association, back_populates="pets")
     health_records = relationship("HealthRecord", back_populates="pet")
     vaccinations = relationship("Vaccination", back_populates="pet")
@@ -112,55 +87,46 @@ class Pet(Base):
 
 class HealthRecord(Base):
     __tablename__ = "health_records"
-
     id = Column(Integer, primary_key=True, index=True)
     pet_id = Column(Integer, ForeignKey("pets.id"))
     record_date = Column(Date, default=date.today)
     weight = Column(Float)
     description = Column(String(500))
-
     pet = relationship("Pet", back_populates="health_records")
 
 
 class Vaccination(Base):
     __tablename__ = "vaccinations"
-
     id = Column(Integer, primary_key=True, index=True)
     pet_id = Column(Integer, ForeignKey("pets.id"))
     name = Column(String(100))
     date_administered = Column(Date)
     next_date = Column(Date, nullable=True)
     repeated = Column(Boolean, default=False)
-
     pet = relationship("Pet", back_populates="vaccinations")
 
 
 class Reminder(Base):
     __tablename__ = "reminders"
-
     id = Column(Integer, primary_key=True, index=True)
     pet_id = Column(Integer, ForeignKey("pets.id"))
     description = Column(String(200))
     reminder_date = Column(DateTime)
     is_completed = Column(Boolean, default=False)
-
     pet = relationship("Pet", back_populates="reminders")
 
 
 class FeedingSchedule(Base):
     __tablename__ = "feeding_schedules"
-
     id = Column(Integer, primary_key=True, index=True)
     pet_id = Column(Integer, ForeignKey("pets.id"))
     feeding_time = Column(DateTime)
     food_type = Column(String(100))
-    quantity = Column(String(50))  # e.g., 100g, 1 cup
+    quantity = Column(String(50))
     notes = Column(String(200), nullable=True)
-
     pet = relationship("Pet", back_populates="feeding_schedules")
 
 
-# Schemas
 class UserBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=50)
     email: str = Field(..., max_length=100)
@@ -179,7 +145,7 @@ class PetBase(BaseModel):
     type: str = Field(..., max_length=50)
     breed: Optional[str] = Field(None, max_length=50)
     birth_date: Optional[date] = None
-    gender: Literal['male', 'female', 'other']
+    gender: Literal["male", "female", "other"]
     age: int = Field(..., gt=0)
 
 
@@ -253,55 +219,62 @@ class FeedingScheduleResponse(FeedingScheduleBase):
         from_attributes = True
 
 
-async def get_session():
+async def get_session() -> AsyncSession:
     async with new_session() as session:
         yield session
 
-
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
-PetDep = Annotated[Pet, Depends(lambda pet_id: get_pet(pet_id))]
 
 
-async def get_pet(pet_id: int, session: SessionDep) -> Pet:  # Поиск питомца
-    pet = await session.get(Pet, pet_id)
-    if not pet:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Питомец не найден"
-        )
-    return pet
+def create_access_token(
+    data: dict, expires_delta: timedelta = None
+) -> str:
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-#Разрешения
+async def authenticate_user(
+    email: str, password: str, session: AsyncSession
+) -> Optional[User]:
+    result = await session.execute(select(User).where(User.email == email))
+    user = result.scalar()
+    if not user or not pwd_context.verify(password, user.password):
+        return None
+    return user
 
-@app.options("/register")
-async def options_register():
-    return {"Allow": "POST"}
-
-
-@app.options("/token")
-async def options_token():
-    return {"Allow": "POST"}
-
-#Запросы
 
 @app.post("/rebuild_bd")
-async def rebuild_bd():
+async def rebuild_database():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
-    return {"ok": True}
+    return {"status": "Database rebuilt"}
 
 
-@app.post("/post_user", response_model=UserResponse)
-async def post_user(
-    data: UserBase,
-    session: SessionDep
+@app.post("/register", response_model=UserResponse)
+async def register_user(
+        user_data: UserBase,
+        session: Annotated[AsyncSession, Depends(get_session)]
 ):
+    existing_email = await session.execute(
+        select(User).where(User.email == user_data.email)
+    )
+    if existing_email.scalar():
+        raise HTTPException(
+            status_code=400,
+            detail="Email уже зарегистрирован"
+        )
+
+    hashed_password = pwd_context.hash(user_data.password)
     new_user = User(
-        name=data.name,
-        email=data.email,
-        password=data.password,
+        name=user_data.name,
+        email=user_data.email,
+        password=hashed_password,
     )
     session.add(new_user)
     await session.commit()
@@ -309,11 +282,11 @@ async def post_user(
     return new_user
 
 
-# Аутентификация
+# Получение токена
 @app.post("/token", response_model=Token)
 async def login_for_access_token(
-    session: SessionDep,
-    form_data: OAuth2PasswordRequestForm = Depends()
+        form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+        session: Annotated[AsyncSession, Depends(get_session)]
 ):
     user = await authenticate_user(form_data.username, form_data.password, session)
     if not user:
@@ -330,71 +303,20 @@ async def login_for_access_token(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-# Регистрация
-@app.post("/register", response_model=UserResponse)
-async def register_user(user_data: UserBase, session: SessionDep):
-    existing_email = await session.execute(select(User).where(User.email == user_data.email))
-    if existing_email.scalar():
-        raise HTTPException(
-            status_code=400,
-            detail="Email уже зарегистрирован"
-        )
-
-    existing_name = await session.execute(select(User).where(User.name == user_data.name))
-    if existing_name.scalar():
-        raise HTTPException(
-            status_code=400,
-            detail="Имя пользователя уже занято"
-        )
-    if len(user_data.password) < 6:
-        raise HTTPException(
-            status_code=400,
-            detail="Пароль должен содержать минимум 6 символов"
-        )
-    hashed_password = get_password_hash(user_data.password)
-    new_user = User(
-        name=user_data.name,
-        email=user_data.email,
-        password=hashed_password,
-    )
-    session.add(new_user)
-    await session.commit()
-    await session.refresh(new_user)
-    return new_user
-
-
-# Текущий пользователь
-async def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)],
-    session: SessionDep
+# Получение текущего пользователя
+@app.get("/users/me", response_model=UserResponse)
+async def read_users_me(
+        current_user: Annotated[User, Depends(Pet)]
 ):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Неверные учетные данные",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise credentials_exception
-        token_data = TokenData(email=email)
-    except JWTError:
-        raise credentials_exception
-
-    result = await session.execute(select(User).where(User.email == token_data.email))
-    user = result.scalar()
-    if user is None:
-        raise credentials_exception
-    return user
+    return current_user
 
 
-# Питомцы
+# Создание питомца
 @app.post("/pets", response_model=PetResponse)
 async def create_pet(
-    pet: PetBase,
-    session: SessionDep,
-    current_user: User = Depends(get_current_user)
+        pet: PetBase,
+        session: Annotated[AsyncSession, Depends(get_session)],
+        current_user: Annotated[User, Depends(Pet)]
 ):
     new_pet = Pet(**pet.model_dump(), user_id=current_user.id)
     session.add(new_pet)
@@ -403,84 +325,51 @@ async def create_pet(
     return new_pet
 
 
+# Получение питомцев пользователя
 @app.get("/pets", response_model=List[PetResponse])
-async def get_all_pets(session: SessionDep):
-    result = await session.execute(select(Pet))
-    pets = result.scalars().all()
-    return pets
+async def get_user_pets(
+        session: Annotated[AsyncSession, Depends(get_session)],
+        current_user: Annotated[User, Depends(Pet)]
+):
+    result = await session.execute(
+        select(Pet).where(Pet.user_id == current_user.id)
+    )
+    return result.scalars().all()
 
 
-# Записи здоровья
+# Создание записи о здоровье
 @app.post("/health-records", response_model=HealthRecordResponse)
 async def create_health_record(
-    record: HealthRecordBase,
-    session: SessionDep,
-    pet: PetDep
+        record: HealthRecordBase,
+        pet_id: int,
+        session: Annotated[AsyncSession, Depends(get_session)],
+        current_user: Annotated[User, Depends(Pet)]
 ):
-    new_record = HealthRecord(**record.model_dump())
+    pet = await session.get(Pet, pet_id)
+    if not pet or pet.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Питомец не найден")
+
+    new_record = HealthRecord(**record.model_dump(), pet_id=pet_id)
     session.add(new_record)
     await session.commit()
     await session.refresh(new_record)
     return new_record
 
 
+# Получение записей о здоровье питомца
 @app.get("/pets/{pet_id}/health-records", response_model=List[HealthRecordResponse])
-async def get_pet_health_records(pet: PetDep, session: SessionDep):
+async def get_pet_health_records(
+        pet_id: int,
+        session: Annotated[AsyncSession, Depends(get_session)],
+        current_user: Annotated[User, Depends(Pet)]
+):
+    pet = await session.get(Pet, pet_id)
+    if not pet or pet.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Питомец не найден")
     return pet.health_records
 
 
-# Вакцинация
-@app.post("/vaccinations", response_model=VaccinationResponse)
-async def create_vaccination(
-    vaccination: VaccinationBase,
-    session: SessionDep,
-    pet: PetDep
-):
-    new_vaccination = Vaccination(**vaccination.model_dump())
-    session.add(new_vaccination)
-    await session.commit()
-    await session.refresh(new_vaccination)
-    return new_vaccination
+if __name__ == "__main__":
+    import uvicorn
 
-
-@app.get("/pets/{pet_id}/vaccinations", response_model=List[VaccinationResponse])
-async def get_pet_vaccinations(pet: PetDep):
-    return pet.vaccinations
-
-
-# Напоминания
-@app.post("/reminders", response_model=ReminderResponse)
-async def create_reminder(
-    reminder: ReminderBase,
-    session: SessionDep,
-    pet: PetDep
-):
-    new_reminder = Reminder(**reminder.model_dump())
-    session.add(new_reminder)
-    await session.commit()
-    await session.refresh(new_reminder)
-    return new_reminder
-
-
-@app.get("/pets/{pet_id}/reminders", response_model=List[ReminderResponse])
-async def get_pet_reminders(pet: PetDep):
-    return pet.reminders
-
-
-# График кормления
-@app.post("/feeding-schedules", response_model=FeedingScheduleResponse)
-async def create_feeding_schedule(
-    schedule: FeedingScheduleBase,
-    session: SessionDep,
-    pet: PetDep
-):
-    new_schedule = FeedingSchedule(**schedule.model_dump())
-    session.add(new_schedule)
-    await session.commit()
-    await session.refresh(new_schedule)
-    return new_schedule
-
-
-@app.get("/pets/{pet_id}/feeding-schedules", response_model=List[FeedingScheduleResponse])
-async def get_pet_feeding_schedules(pet: PetDep):
-    return pet.feeding_schedules
+    uvicorn.run(app, host="0.0.0.0", port=8000)

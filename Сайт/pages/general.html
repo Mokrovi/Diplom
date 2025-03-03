@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pet Manager</title>
+    <link href='https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.8/main.min.css' rel='stylesheet'>
+    <link href='https://cdn.jsdelivr.net/npm/@fullcalendar/daygrid@6.1.8/main.min.css' rel='stylesheet'>
     <style>
         * {
             margin: 0;
@@ -16,7 +18,7 @@
             color: white;
             font-family: Arial, sans-serif;
             min-height: 100vh;
-            padding-bottom: 70px; 
+            padding-bottom: 70px;
         }
 
         .content-section {
@@ -30,7 +32,6 @@
             display: block;
         }
 
-        
         .header {
             padding: 20px;
             position: relative;
@@ -44,7 +45,6 @@
             top: 20px;
         }
 
-        
         .footer {
             position: fixed;
             bottom: 0;
@@ -87,7 +87,8 @@
         }
 
         .nav-button.active .nav-icon {
-            filter: invert(77%) sepia(33%) saturate(999%) hue-rotate(7deg) brightness(94%) contrast(90%);
+            filter: invert(77%) sepia(33%) saturate(999%) 
+                    hue-rotate(7deg) brightness(94%) contrast(90%);
         }
 
         .nav-label {
@@ -109,7 +110,6 @@
             }
         }
 
-        
         .pets-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -123,6 +123,38 @@
             padding: 15px;
             text-align: center;
         }
+
+        .no-pets {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .add-pet-button {
+            background: #D2C639;
+            color: #213568;
+            padding: 12px 30px;
+            border-radius: 25px;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        .profile-content {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 30px;
+        }
+
+        .logout-button {
+            background: #D2C639;
+            color: #213568;
+            padding: 12px 30px;
+            border-radius: 25px;
+            border: none;
+            margin-top: 20px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -132,73 +164,128 @@
         </svg>
     </div>
 
-    <!-- Секция с питомцами -->
     <section id="pets-section" class="content-section active-section">
-        <div class="pets-grid">
-            <!-- Динамическое содержимое -->
+        <div class="pets-grid"></div>
+    </section>
+
+    <section id="calendar-section" class="content-section">
+        <div id="calendar"></div>
+    </section>
+
+    <section id="profile-section" class="content-section">
+        <div class="profile-content">
+            <h2>Профиль пользователя</h2>
+            <p>Имя: <span id="profile-name"></span></p>
+            <p>Email: <span id="profile-email"></span></p>
+            <button class="logout-button" onclick="logout()">Выйти</button>
         </div>
     </section>
 
-    <!-- Секция с календарем -->
-    <section id="calendar-section" class="content-section">
-        <!-- Контент календаря -->
-    </section>
-
-    <!-- Секция профиля -->
-    <section id="profile-section" class="content-section">
-        <!-- Контент профиля -->
-    </section>
-
-    <!-- Футер -->
     <div class="footer">
         <button class="nav-button active" onclick="showSection('pets')">
-            <img src="photos/pet.svg" class="nav-icon">
+            <img src="pet.svg" class="nav-icon" alt="Питомцы">
         </button>
-
         <button class="nav-button" onclick="showSection('calendar')">
-            <img src="icons/calendar.svg" class="nav-icon" alt="Календарь">
-            <span class="nav-label">Календарь</span>
+            <img src="calendar.svg" class="nav-icon" alt="Календарь">
         </button>
-
         <button class="nav-button" onclick="showSection('profile')">
-            <img src="icons/profile.svg" class="nav-icon" alt="Профиль">
-            <span class="nav-label">Профиль</span>
+            <img src="profile.svg" class="nav-icon" alt="Профиль">
         </button>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.8/main.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/daygrid@6.1.8/main.min.js"></script>
     <script>
-        // Навигация
+        const API_URL = 'http://localhost:8000';
+        let currentToken = localStorage.getItem('token');
+
+        async function checkAuth() {
+            if (!currentToken) window.location.href = '/login.html';
+        }
+
+        async function loadPets() {
+            const response = await fetch(`${API_URL}/pets`, {
+                headers: { 'Authorization': `Bearer ${currentToken}` }
+            });
+            const petsGrid = document.querySelector('.pets-grid');
+            
+            if (!response.ok) {
+                petsGrid.innerHTML = '<p>Ошибка загрузки данных</p>';
+                return;
+            }
+
+            const pets = await response.json();
+            petsGrid.innerHTML = pets.length > 0 
+                ? pets.map(pet => `
+                    <div class="pet-card">
+                        <img src="default-pet.png" class="pet-image" alt="${pet.name}">
+                        <h3>${pet.name}</h3>
+                        <div class="pet-buttons-grid">
+                            ${Array(6).fill('<button class="pet-button">Кнопка</button>').join('')}
+                        </div>
+                    </div>
+                `).join('')
+                : `
+                    <div class="no-pets">
+                        <img src="no-pets.svg" alt="Нет питомцев">
+                        <button class="add-pet-button">Добавить питомца</button>
+                    </div>
+                `;
+        }
+
+        function initCalendar() {
+            const calendarEl = document.getElementById('calendar');
+            const calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridWeek',
+                locale: 'ru',
+                events: async (info, success) => {
+                    const res = await fetch(`${API_URL}/reminders?start=${info.startStr}&end=${info.endStr}`, {
+                        headers: { 'Authorization': `Bearer ${currentToken}` }
+                    });
+                    success(await res.json());
+                }
+            });
+            calendar.render();
+        }
+
+        async function loadProfile() {
+            const response = await fetch(`${API_URL}/users/me`, {
+                headers: { 'Authorization': `Bearer ${currentToken}` }
+            });
+            const user = await response.json();
+            document.getElementById('profile-name').textContent = user.name;
+            document.getElementById('profile-email').textContent = user.email;
+        }
+
         function showSection(sectionId) {
-            // Скрыть все секции
             document.querySelectorAll('.content-section').forEach(section => {
                 section.classList.remove('active-section');
             });
-
-            // Убрать активные классы с кнопок
             document.querySelectorAll('.nav-button').forEach(btn => {
                 btn.classList.remove('active');
             });
-
-            // Показать выбранную секцию
+            
             document.getElementById(`${sectionId}-section`).classList.add('active-section');
-            
-            // Активировать кнопку
             event.currentTarget.classList.add('active');
-            
-            // Показать/скрыть кнопку "Назад"
             document.querySelector('.back-button').style.display = 
                 sectionId === 'pets' ? 'none' : 'block';
         }
 
-        // Инициализация
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login.html';
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await checkAuth();
+            await loadPets();
+            await loadProfile();
+            initCalendar();
+        });
+
         document.querySelector('.back-button').addEventListener('click', () => {
             showSection('pets');
         });
-
-        // Моковые данные
-        window.onload = () => {
-            // Здесь можно добавить загрузку данных
-        };
     </script>
 </body>
 </html>
