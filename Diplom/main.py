@@ -1,4 +1,4 @@
-from typing import List, Optional, Literal, Type
+from typing import List, Optional, Literal
 from datetime import date, datetime, timedelta
 from pydantic import BaseModel, Field
 from sqlalchemy import (
@@ -18,10 +18,11 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from typing import Annotated
 
-
+# Базовая конфигурация
 Base = declarative_base()
 app = FastAPI()
 
+# Настройки CORS
 origins = ["*"]
 
 app.add_middleware(
@@ -32,25 +33,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Настройки базы данных
 engine = create_async_engine("sqlite+aiosqlite:///Diplom.db")
 new_session = async_sessionmaker(engine, expire_on_commit=False)
 
+# Настройки аутентификации
 SECRET_KEY = "5"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-
-class TokenData(BaseModel):
-    email: Optional[str] = None
-
-
+# Модели базы данных
 user_pet_association = Table(
     "user_pet_association",
     Base.metadata,
@@ -62,7 +56,7 @@ user_pet_association = Table(
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(50), unique=True, index=True)
+    name = Column(String(50), index=True)
     email = Column(String(100), unique=True, index=True)
     password = Column(String(255))
     pets = relationship("Pet", secondary=user_pet_association, back_populates="users")
@@ -127,14 +121,26 @@ class FeedingSchedule(Base):
     pet = relationship("Pet", back_populates="feeding_schedules")
 
 
+# Pydantic модели
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    email: Optional[str] = None
+
+
 class UserBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=50)
     email: str = Field(..., max_length=100)
     password: str = Field(..., min_length=6, max_length=255)
 
 
-class UserResponse(UserBase):
+class UserResponse(BaseModel):
     id: int
+    name: str
+    email: str
 
     class Config:
         from_attributes = True
@@ -149,42 +155,15 @@ class PetBase(BaseModel):
     age: int = Field(..., gt=0)
 
 
-class PetResponse(PetBase):
+class PetResponse(BaseModel):
     id: int
+    name: str
+    type: str
+    breed: Optional[str]
+    birth_date: Optional[date]
+    gender: str
+    age: int
     user_id: int
-    health_records: List[int] = []
-    vaccinations: List[int] = []
-    reminders: List[int] = []
-    feeding_schedules: List[int] = []
-
-    class Config:
-        from_attributes = True
-
-
-class HealthRecordBase(BaseModel):
-    record_date: date = Field(default_factory=date.today)
-    weight: float = Field(..., gt=0)
-    description: str = Field(..., max_length=500)
-
-
-class HealthRecordResponse(HealthRecordBase):
-    id: int
-    pet_id: int
-
-    class Config:
-        from_attributes = True
-
-
-class VaccinationBase(BaseModel):
-    name: str = Field(..., max_length=100)
-    date_administered: date
-    next_date: Optional[date] = None
-    repeated: bool = False
-
-
-class VaccinationResponse(VaccinationBase):
-    id: int
-    pet_id: int
 
     class Config:
         from_attributes = True
@@ -204,31 +183,17 @@ class ReminderResponse(ReminderBase):
         from_attributes = True
 
 
-class FeedingScheduleBase(BaseModel):
-    feeding_time: datetime
-    food_type: str = Field(..., max_length=100)
-    quantity: str = Field(..., max_length=50)
-    notes: Optional[str] = Field(None, max_length=200)
-
-
-class FeedingScheduleResponse(FeedingScheduleBase):
-    id: int
-    pet_id: int
-
-    class Config:
-        from_attributes = True
-
-
+# Зависимости
 async def get_session() -> AsyncSession:
     async with new_session() as session:
         yield session
 
+
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
-def create_access_token(
-    data: dict, expires_delta: timedelta = None
-) -> str:
+# Вспомогательные функции
+def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
@@ -238,9 +203,7 @@ def create_access_token(
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-async def authenticate_user(
-    email: str, password: str, session: AsyncSession
-) -> Optional[User]:
+async def authenticate_user(email: str, password: str, session: AsyncSession) -> Optional[User]:
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar()
     if not user or not pwd_context.verify(password, user.password):
@@ -248,6 +211,34 @@ async def authenticate_user(
     return user
 
 
+async def get_current_user(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    session: SessionDep
+) -> Optional[User]:
+    if not token or token == "null":
+        return None
+
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Неверный токен",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except JWTError:
+        return None
+
+    result = await session.execute(select(User).where(User.email == email))
+    user = result.scalar()
+    if user is None:
+        return None
+    return user
+
+
+# Эндпоинты
 @app.post("/rebuild_bd")
 async def rebuild_database():
     async with engine.begin() as conn:
@@ -256,10 +247,22 @@ async def rebuild_database():
     return {"status": "Database rebuilt"}
 
 
+@app.get("/check-token")
+async def check_token(
+    current_user: Annotated[User, Depends(get_current_user)]
+):
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Неверный токен",
+        )
+    return {"status": "valid"}
+
+
 @app.post("/register", response_model=UserResponse)
 async def register_user(
         user_data: UserBase,
-        session: Annotated[AsyncSession, Depends(get_session)]
+        session: SessionDep
 ):
     existing_email = await session.execute(
         select(User).where(User.email == user_data.email)
@@ -282,11 +285,10 @@ async def register_user(
     return new_user
 
 
-# Получение токена
 @app.post("/token", response_model=Token)
 async def login_for_access_token(
         form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-        session: Annotated[AsyncSession, Depends(get_session)]
+        session: SessionDep
 ):
     user = await authenticate_user(form_data.username, form_data.password, session)
     if not user:
@@ -303,20 +305,39 @@ async def login_for_access_token(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-# Получение текущего пользователя
 @app.get("/users/me", response_model=UserResponse)
 async def read_users_me(
-        current_user: Annotated[User, Depends(Pet)]
+    current_user: Annotated[User, Depends(get_current_user)]
 ):
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Неверный токен",
+        )
     return current_user
 
 
-# Создание питомца
+@app.get("/pets", response_model=List[PetResponse])
+async def get_user_pets(
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: SessionDep
+):
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Неверный токен",
+        )
+    result = await session.execute(
+        select(Pet).where(Pet.user_id == current_user.id)
+    )
+    return result.scalars().all()
+
+
 @app.post("/pets", response_model=PetResponse)
 async def create_pet(
         pet: PetBase,
-        session: Annotated[AsyncSession, Depends(get_session)],
-        current_user: Annotated[User, Depends(Pet)]
+        session: SessionDep,
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     new_pet = Pet(**pet.model_dump(), user_id=current_user.id)
     session.add(new_pet)
@@ -325,50 +346,24 @@ async def create_pet(
     return new_pet
 
 
-# Получение питомцев пользователя
-@app.get("/pets", response_model=List[PetResponse])
-async def get_user_pets(
-        session: Annotated[AsyncSession, Depends(get_session)],
-        current_user: Annotated[User, Depends(Pet)]
+@app.get("/reminders", response_model=List[ReminderResponse])
+async def get_reminders(
+        start: date,
+        end: date,
+        session: SessionDep,
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     result = await session.execute(
-        select(Pet).where(Pet.user_id == current_user.id)
+        select(Reminder)
+        .join(Pet)
+        .where(Pet.user_id == current_user.id)
+        .where(Reminder.reminder_date >= start)
+        .where(Reminder.reminder_date <= end)
     )
     return result.scalars().all()
 
 
-# Создание записи о здоровье
-@app.post("/health-records", response_model=HealthRecordResponse)
-async def create_health_record(
-        record: HealthRecordBase,
-        pet_id: int,
-        session: Annotated[AsyncSession, Depends(get_session)],
-        current_user: Annotated[User, Depends(Pet)]
-):
-    pet = await session.get(Pet, pet_id)
-    if not pet or pet.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Питомец не найден")
-
-    new_record = HealthRecord(**record.model_dump(), pet_id=pet_id)
-    session.add(new_record)
-    await session.commit()
-    await session.refresh(new_record)
-    return new_record
-
-
-# Получение записей о здоровье питомца
-@app.get("/pets/{pet_id}/health-records", response_model=List[HealthRecordResponse])
-async def get_pet_health_records(
-        pet_id: int,
-        session: Annotated[AsyncSession, Depends(get_session)],
-        current_user: Annotated[User, Depends(Pet)]
-):
-    pet = await session.get(Pet, pet_id)
-    if not pet or pet.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Питомец не найден")
-    return pet.health_records
-
-
+# Запуск приложения
 if __name__ == "__main__":
     import uvicorn
 

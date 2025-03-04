@@ -193,7 +193,7 @@
                 });
                 
                 const data = await handleResponse(response);
-                localStorage.setItem('access_token', data.access_token);
+                localStorage.setItem('token', data.access_token);
                 window.location.href = '/Сайт/pages/general.html';
             } catch (error) {
                 alert(error.message);
