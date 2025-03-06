@@ -4,11 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pet Manager</title>
+
+    <!-- Подключение стилей FullCalendar -->
     <link href='https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.8/main.min.css' rel='stylesheet'>
     <link href='https://cdn.jsdelivr.net/npm/@fullcalendar/daygrid@6.1.8/main.min.css' rel='stylesheet'>
+
+    <!-- Подключение скриптов FullCalendar -->
     <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.8/main.global.min.js'></script>
     <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/daygrid@6.1.8/main.global.min.js'></script>
     <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.8/locales-all.global.min.js'></script>
+
     <style>
         * {
             margin: 0;
@@ -24,17 +29,6 @@
             padding-bottom: 70px;
         }
 
-        .content-section {
-            display: none;
-            padding: 20px;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .active-section {
-            display: block;
-        }
-
         .header {
             padding: 20px;
             position: relative;
@@ -46,6 +40,18 @@
             position: absolute;
             left: 20px;
             top: 20px;
+            color: white;
+        }
+
+        .content-section {
+            display: none;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .active-section {
+            display: block;
         }
 
         .footer {
@@ -90,8 +96,7 @@
         }
 
         .nav-button.active .nav-icon {
-            filter: invert(77%) sepia(33%) saturate(999%) 
-                    hue-rotate(7deg) brightness(94%) contrast(90%);
+            filter: invert(77%) sepia(33%) saturate(999%) hue-rotate(7deg) brightness(94%) contrast(90%);
         }
 
         .nav-label {
@@ -103,98 +108,13 @@
             color: #D2C639;
         }
 
-        @media (max-width: 480px) {
-            .nav-icon {
-                width: 24px;
-                height: 24px;
-            }
-            .nav-label {
-                font-size: 10px;
-            }
-        }
-
-        .pets-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-
-        .pet-card {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 15px;
-            padding: 15px;
-            text-align: center;
-        }
-
-        .no-pets {
-            text-align: center;
-            padding: 40px 20px;
-        }
-
-        .add-pet-button {
-            background: #D2C639;
-            color: #213568;
-            padding: 12px 30px;
-            border-radius: 25px;
-            border: none;
-            font-weight: bold;
-            cursor: pointer;
-            margin-top: 20px;
-        }
-
-        .profile-content {
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 30px;
-        }
-
-        .logout-button {
-            background: #D2C639;
-            color: #213568;
-            padding: 12px 30px;
-            border-radius: 25px;
-            border: none;
-            margin-top: 20px;
-            cursor: pointer;
-        }
-
-        /* Стили для кнопок создания */
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .create-button {
-            background: #D2C639;
-            color: #213568;
-            padding: 10px 20px;
-            border-radius: 20px;
-            border: none;
-            font-weight: bold;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .create-button img {
-            width: 20px;
-            height: 20px;
-            filter: invert(16%) sepia(22%) saturate(1234%) 
-                    hue-rotate(183deg) brightness(93%) contrast(88%);
-        }
-
-        /* Модальные окна */
         .modal-overlay {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.5);
             display: none;
             align-items: center;
             justify-content: center;
@@ -202,38 +122,116 @@
         }
 
         .modal-content {
-            background: #213568;
+            background: #2a3f7a;
             padding: 25px;
-            border-radius: 15px;
+            border-radius: 12px;
             width: 90%;
-            max-width: 400px;
+            max-width: 500px;
+            color: white;
         }
 
-        .modal-content h3 {
-            margin-bottom: 20px;
+        .form-group {
+            margin-bottom: 15px;
         }
 
-        .modal-content form {
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #40538a;
+            background: #1a2a4f;
+            color: white;
+        }
+
+        .form-row {
             display: flex;
-            flex-direction: column;
             gap: 15px;
         }
 
-        .modal-content input,
-        .modal-content select,
-        .modal-content textarea {
-            padding: 8px;
-            border-radius: 5px;
-            border: 1px solid #ccc;
+        .form-actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
         }
 
-        .modal-content button[type="submit"] {
+        .form-actions button {
+            padding: 8px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .form-actions button[type="submit"] {
             background: #D2C639;
             color: #213568;
-            padding: 10px;
             border: none;
+        }
+
+        .cancel-btn {
+            background: none;
+            border: 1px solid #D2C639;
+            color: #D2C639;
+        }
+
+        .pets-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .pet-card {
+            background: #2a3f7a;
+            padding: 20px;
+            border-radius: 10px;
+            transition: transform 0.3s ease;
+        }
+
+        .pet-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .create-button {
+            background: #D2C639;
+            color: #213568;
+            border: none;
+            padding: 10px 20px;
             border-radius: 5px;
             cursor: pointer;
+            margin: 20px 0;
+        }
+
+        #profile-form {
+            max-width: 500px;
+            margin: 20px auto;
+        }
+
+        #profile-form .form-group {
+            margin-bottom: 20px;
+        }
+
+        #profile-form input {
+            width: 100%;
+            padding: 10px;
+            background: #1a2a4f;
+            border: 1px solid #40538a;
+            color: white;
+            border-radius: 4px;
+        }
+
+        .profile-actions {
+            margin-top: 30px;
+            display: flex;
+            gap: 15px;
+            justify-content: flex-start;
         }
     </style>
 </head>
@@ -244,19 +242,16 @@
         </svg>
     </div>
 
-    <!-- питомцы -->
     <section id="pets-section" class="content-section active-section">
         <div class="section-header">
             <h2>Мои питомцы</h2>
-            <button class="create-button" onclick="showPetForm()">
-                <img src="../photos/plus.svg" alt="Добавить">
-                Добавить питомца
-            </button>
         </div>
         <div class="pets-grid"></div>
+        <button class="create-button" onclick="openModal('pet-modal')">
+            Добавить питомца
+        </button>
     </section>
 
-    <!-- календарь -->
     <section id="calendar-section" class="content-section">
         <div id="calendar"></div>
     </section>
@@ -264,78 +259,150 @@
     <section id="profile-section" class="content-section">
         <div class="profile-content">
             <h2>Профиль пользователя</h2>
-            <p>Имя: <span id="profile-name"></span></p>
-            <p>Email: <span id="profile-email"></span></p>
-            <button class="logout-button" onclick="logout()">Выйти</button>
+            <form id="profile-form" onsubmit="return saveProfile(event)">
+                <div class="form-group">
+                    <label>Имя:</label>
+                    <input type="text" id="profile-name" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label>Email:</label>
+                    <input type="email" id="profile-email" name="email" required>
+                </div>
+                <div class="form-actions">
+                    <button type="submit">Сохранить изменения</button>
+                    <button type="button" class="cancel-btn" onclick="openModal('password-modal')">
+                        Сменить пароль
+                    </button>
+                </div>
+            </form>
+            <button class="logout-button" onclick="logout()" style="margin-top: 20px;">Выйти</button>
         </div>
     </section>
 
     <div class="footer">
-        <button class="nav-button active" onclick="showSection('pets')">
+        <button class="nav-button active" data-section="pets" onclick="showSection('pets')">
             <img src="../photos/pet.svg" class="nav-icon" alt="Питомцы">
         </button>
-        <button class="nav-button" onclick="showSection('calendar')">
+        <button class="nav-button" data-section="calendar" onclick="showSection('calendar')">
             <img src="../photos/calendar.svg" class="nav-icon" alt="Календарь">
         </button>
-        <button class="nav-button" onclick="showSection('profile')">
+        <button class="nav-button" data-section="profile" onclick="showSection('profile')">
             <img src="../photos/profile.svg" class="nav-icon" alt="Профиль">
         </button>
     </div>
 
-    
     <div id="pet-modal" class="modal-overlay">
         <div class="modal-content">
-            <h3>Новый питомец</h3>
-            <form id="pet-form">
-                <input type="text" placeholder="Имя питомца" required>
-                <select required>
-                    <option value="">Выберите вид</option>
-                    <option>Собака</option>
-                    <option>Кошка</option>
-                </select>
-                <input type="date" required>
-                <button type="submit">Создать</button>
+            <h3>Добавить питомца</h3>
+            <form id="pet-form" onsubmit="return handlePetSubmit(event)">
+                <div class="form-group">
+                    <label>Имя:</label>
+                    <input type="text" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label>Тип:</label>
+                    <select name="type" required>
+                        <option value="">Выберите тип</option>
+                        <option value="Собака">Собака</option>
+                        <option value="Кошка">Кошка</option>
+                        <option value="Грызун">Грызун</option>
+                        <option value="Птица">Птица</option>
+                        <option value="Другое">Другое</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Пол:</label>
+                    <select name="gender" required>
+                        <option value="">Выберите пол</option>
+                        <option value="male">Мужской</option>
+                        <option value="female">Женский</option>
+                        <option value="other">Другой</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Дата рождения:</label>
+                        <input type="date" name="birth_date">
+                    </div>
+                    <div class="form-group">
+                        <label>Возраст (лет):</label>
+                        <input type="number" name="age" min="0" max="50" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Порода:</label>
+                    <input type="text" name="breed">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="cancel-btn" onclick="closeModal('pet-modal')">Отмена</button>
+                    <button type="submit">Сохранить</button>
+                </div>
             </form>
         </div>
     </div>
 
-    <div id="event-modal" class="modal-overlay">
+    <div id="password-modal" class="modal-overlay">
         <div class="modal-content">
-            <h3>Новое событие</h3>
-            <form id="event-form">
-                <input type="text" placeholder="Название события" required>
-                <input type="datetime-local" required>
-                <textarea placeholder="Описание"></textarea>
-                <button type="submit">Создать</button>
+            <h3>Смена пароля</h3>
+            <form id="change-password-form" onsubmit="return changePassword(event)">
+                <div class="form-group">
+                    <label>Текущий пароль:</label>
+                    <input type="password" name="old_password" required>
+                </div>
+                <div class="form-group">
+                    <label>Новый пароль:</label>
+                    <input type="password" name="new_password" required>
+                </div>
+                <div class="form-group">
+                    <label>Повторите новый пароль:</label>
+                    <input type="password" name="confirm_password" required>
+                </div>
+                <div class="form-actions">
+                    <button type="submit">Сменить пароль</button>
+                    <button type="button" class="cancel-btn" onclick="closeModal('password-modal')">
+                        Отмена
+                    </button>
+                </div>
             </form>
         </div>
     </div>
 
     <script>
         const API_URL = 'http://localhost:8000';
+        let previousSection = 'pets';
+        let calendar;
 
-        // Добавляем глобальную переменную для FullCalendar
         const { Calendar } = FullCalendar;
         const { dayGridPlugin } = FullCalendarDayGrid;
 
-        async function handleResponse(response) {
-            if (response.status === 401) {
-                localStorage.removeItem('access_token');
-                window.location.href = '/login';
-                return null;
+        async function checkAuth() {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                redirectToLogin();
+                return false;
             }
             
-            if (response.status === 422) {
-                const error = await response.json();
-                console.error('Validation error:', error.detail);
-                throw new Error('Ошибка валидации данных');
+            try {
+                const response = await fetch(`${API_URL}/check-token`, {
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    redirectToLogin();
+                    return false;
+                }
+                return true;
+            } catch (error) {
+                redirectToLogin();
+                return false;
             }
+        }
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            return response.json();
+        function redirectToLogin() {
+            window.location.href = 'pages/authorization.html';
         }
 
         async function loadPets() {
@@ -348,12 +415,23 @@
                     }
                 });
                 
-                const pets = await handleResponse(response);
-                // Остальной код загрузки питомцев...
+                if (!response.ok) throw new Error('Ошибка загрузки');
                 
+                const pets = await response.json();
+                const petsGrid = document.querySelector('.pets-grid');
+                
+                petsGrid.innerHTML = pets.map(pet => `
+                    <div class="pet-card">
+                        <h3>${pet.name}</h3>
+                        <p>Тип: ${pet.type}</p>
+                        ${pet.breed ? `<p>Порода: ${pet.breed}</p>` : ''}
+                        <p>Возраст: ${pet.age} лет</p>
+                        <p>Пол: ${pet.gender === 'male' ? '♂' : '♀'}</p>
+                    </div>
+                `).join('');
             } catch (error) {
-                console.error('Error loading pets:', error);
-                alert('Ошибка загрузки питомцев: ' + error.message);
+                console.error('Ошибка загрузки питомцев:', error);
+                alert('Не удалось загрузить питомцев');
             }
         }
 
@@ -367,12 +445,79 @@
                     }
                 });
                 
-                const user = await handleResponse(response);
-                // Остальной код загрузки профиля...
+                if (!response.ok) throw new Error('Ошибка загрузки');
                 
+                const user = await response.json();
+                document.getElementById('profile-name').value = user.name;
+                document.getElementById('profile-email').value = user.email;
             } catch (error) {
-                console.error('Error loading profile:', error);
-                alert('Ошибка загрузки профиля: ' + error.message);
+                console.error('Ошибка загрузки профиля:', error);
+                alert('Не удалось загрузить профиль');
+            }
+        }
+
+        async function saveProfile(event) {
+            event.preventDefault();
+            const formData = {
+                name: document.getElementById('profile-name').value,
+                email: document.getElementById('profile-email').value
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/users/me`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) throw new Error(await response.text());
+                
+                alert('Профиль успешно обновлен');
+                await loadProfile();
+            } catch (error) {
+                console.error('Ошибка сохранения:', error);
+                alert(`Ошибка: ${error.message}`);
+            }
+        }
+
+        async function changePassword(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            const passwords = {
+                old_password: formData.get('old_password'),
+                new_password: formData.get('new_password'),
+                confirm_password: formData.get('confirm_password')
+            };
+
+            if (passwords.new_password !== passwords.confirm_password) {
+                alert('Новые пароли не совпадают');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/users/change-password`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        old_password: passwords.old_password,
+                        new_password: passwords.new_password
+                    })
+                });
+
+                if (!response.ok) throw new Error(await response.text());
+                
+                alert('Пароль успешно изменен');
+                closeModal('password-modal');
+                event.target.reset();
+            } catch (error) {
+                console.error('Ошибка смены пароля:', error);
+                alert(`Ошибка: ${error.message}`);
             }
         }
 
@@ -380,48 +525,124 @@
             const calendarEl = document.getElementById('calendar');
             if (!calendarEl) return;
 
-            const calendar = new Calendar(calendarEl, {
+            calendar = new Calendar(calendarEl, {
                 plugins: [dayGridPlugin],
                 initialView: 'dayGridMonth',
                 locale: 'ru',
-                // Остальные настройки календаря...
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,dayGridWeek,dayGridDay'
+                },
+                events: async (info, success) => {
+                    try {
+                        const res = await fetch(
+                            `${API_URL}/reminders?start=${info.startStr}&end=${info.endStr}`, 
+                            {
+                                headers: { 
+                                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                                    'Content-Type': 'application/json'
+                                }
+                            }
+                        );
+                        const reminders = await res.json();
+                        const events = reminders.map(reminder => ({
+                            title: reminder.description,
+                            start: reminder.reminder_date,
+                            allDay: false
+                        }));
+                        success(events);
+                    } catch (error) {
+                        console.error('Ошибка загрузки событий:', error);
+                        success([]);
+                    }
+                }
             });
             calendar.render();
+        }
+
+        function openModal(modalId) {
+            document.getElementById(modalId).style.display = 'flex';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
         }
 
         function showSection(sectionId) {
             document.querySelectorAll('.content-section').forEach(section => {
                 section.classList.remove('active-section');
             });
-            document.querySelectorAll('.nav-button').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            document.getElementById(`${sectionId}-section`).classList.add('active-section');
-            event.currentTarget.classList.add('active');
+
+            document.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('active'));
+
+            const activeButton = document.querySelector(`.nav-button[data-section="${sectionId}"]`);
+            if (activeButton) {
+                activeButton.classList.add('active');
+            }
+
+            const activeSection = document.getElementById(`${sectionId}-section`);
+            if (activeSection) {
+                activeSection.classList.add('active-section');
+            }
+
+            previousSection = sectionId;
+
             document.querySelector('.back-button').style.display = 
                 sectionId === 'pets' ? 'none' : 'block';
         }
 
-        function logout() {
-            localStorage.removeItem('access_token');
-        }
+        async function handlePetSubmit(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
 
-        // Функции для модальных окон
-        function showPetForm() {
-            document.getElementById('pet-modal').style.display = 'flex';
-        }
+            const petData = {
+                name: formData.get('name'),
+                type: formData.get('type'),
+                gender: formData.get('gender'),
+                breed: formData.get('breed') || null,
+                birth_date: formData.get('birth_date') || null,
+                age: parseInt(formData.get('age'), 10)
+            };
 
-        function showEventForm() {
-            document.getElementById('event-modal').style.display = 'flex';
-        }
+            if (!petData.name || !petData.type || !petData.gender) {
+                alert("Заполните обязательные поля: Имя, Тип и Пол");
+                return false;
+            }
 
-        document.querySelectorAll('.modal-overlay').forEach(modal => {
-            modal.addEventListener('click', (e) => {
-                if(e.target === modal) {
-                    modal.style.display = 'none';
+            if (isNaN(petData.age) || petData.age <= 0) {
+                alert("Возраст должен быть положительным числом");
+                return false;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/pets`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(petData)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || JSON.stringify(errorData));
                 }
-            });
-        });
+
+                const responseData = await response.json();
+                console.log("Питомец успешно создан:", responseData);
+
+                closeModal('pet-modal');
+                await loadPets();
+                event.target.reset();
+                return false;
+            } catch (error) {
+                console.error('Ошибка создания питомца:', error);
+                alert(`Ошибка: ${error.message}`);
+                return false;
+            }
+        }
 
         document.addEventListener('DOMContentLoaded', async () => {
             try {
@@ -434,8 +655,13 @@
         });
 
         document.querySelector('.back-button').addEventListener('click', () => {
-            showSection('pets');
+            showSection(previousSection);
         });
+
+        function logout() {
+            localStorage.removeItem('access_token');
+            window.location.href = '/pages/authorization.html';
+        }
     </script>
 </body>
 </html>

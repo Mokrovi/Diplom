@@ -1,9 +1,10 @@
+# Импорт необходимых модулей
 from typing import List, Optional, Literal
 from datetime import date, datetime, timedelta
 from pydantic import BaseModel, Field
 from sqlalchemy import (
     Column, Integer, String, Float, Date, DateTime,
-    ForeignKey, Boolean, Table, select
+    ForeignKey, Boolean, Table, select, delete
 )
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.ext.asyncio import (
@@ -48,8 +49,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 user_pet_association = Table(
     "user_pet_association",
     Base.metadata,
-    Column("user_id", Integer, ForeignKey("users.id")),
-    Column("pet_id", Integer, ForeignKey("pets.id")),
+    Column("user_id", Integer, ForeignKey("users.id"), primary_key=True),
+    Column("pet_id", Integer, ForeignKey("pets.id"), primary_key=True),
 )
 
 
@@ -71,7 +72,6 @@ class Pet(Base):
     birth_date = Column(Date, nullable=True)
     gender = Column(String(10))
     age = Column(Integer)
-    user_id = Column(Integer, ForeignKey("users.id"))
     users = relationship("User", secondary=user_pet_association, back_populates="pets")
     health_records = relationship("HealthRecord", back_populates="pet")
     vaccinations = relationship("Vaccination", back_populates="pet")
@@ -163,7 +163,6 @@ class PetResponse(BaseModel):
     birth_date: Optional[date]
     gender: str
     age: int
-    user_id: int
 
     class Config:
         from_attributes = True
@@ -183,6 +182,18 @@ class ReminderResponse(ReminderBase):
         from_attributes = True
 
 
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str = Field(..., min_length=6, max_length=255)
+
+
+class ReminderCreate(BaseModel):
+    pet_id: int
+    description: str = Field(..., max_length=200)
+    reminder_date: datetime
+    is_completed: bool = False
+
+
 # Зависимости
 async def get_session() -> AsyncSession:
     async with new_session() as session:
@@ -192,7 +203,7 @@ async def get_session() -> AsyncSession:
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
-# Вспомогательные функции
+# Функции
 def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
     to_encode = data.copy()
     if expires_delta:
@@ -212,12 +223,9 @@ async def authenticate_user(email: str, password: str, session: AsyncSession) ->
 
 
 async def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)],
-    session: SessionDep
+        token: Annotated[str, Depends(oauth2_scheme)],
+        session: SessionDep
 ) -> Optional[User]:
-    if not token or token == "null":
-        return None
-
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Неверный токен",
@@ -229,12 +237,12 @@ async def get_current_user(
         if email is None:
             raise credentials_exception
     except JWTError:
-        return None
+        raise credentials_exception
 
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar()
     if user is None:
-        return None
+        raise credentials_exception
     return user
 
 
@@ -248,37 +256,18 @@ async def rebuild_database():
 
 
 @app.get("/check-token")
-async def check_token(
-    current_user: Annotated[User, Depends(get_current_user)]
-):
-    if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверный токен",
-        )
+async def check_token(current_user: Annotated[User, Depends(get_current_user)]):
     return {"status": "valid"}
 
 
 @app.post("/register", response_model=UserResponse)
-async def register_user(
-        user_data: UserBase,
-        session: SessionDep
-):
-    existing_email = await session.execute(
-        select(User).where(User.email == user_data.email)
-    )
+async def register_user(user_data: UserBase, session: SessionDep):
+    existing_email = await session.execute(select(User).where(User.email == user_data.email))
     if existing_email.scalar():
-        raise HTTPException(
-            status_code=400,
-            detail="Email уже зарегистрирован"
-        )
+        raise HTTPException(status_code=400, detail="Email уже зарегистрирован")
 
     hashed_password = pwd_context.hash(user_data.password)
-    new_user = User(
-        name=user_data.name,
-        email=user_data.email,
-        password=hashed_password,
-    )
+    new_user = User(name=user_data.name, email=user_data.email, password=hashed_password)
     session.add(new_user)
     await session.commit()
     await session.refresh(new_user)
@@ -306,31 +295,24 @@ async def login_for_access_token(
 
 
 @app.get("/users/me", response_model=UserResponse)
-async def read_users_me(
-    current_user: Annotated[User, Depends(get_current_user)]
-):
-    if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверный токен",
-        )
+async def read_users_me(current_user: Annotated[User, Depends(get_current_user)]):
     return current_user
 
-
-@app.get("/pets", response_model=List[PetResponse])
-async def get_user_pets(
-    current_user: Annotated[User, Depends(get_current_user)],
-    session: SessionDep
+@app.patch("/users/me", response_model=UserResponse)
+async def update_user_profile(
+    update_data: UserBase,
+    session: SessionDep,
+    current_user: Annotated[User, Depends(get_current_user)]
 ):
-    if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверный токен",
-        )
-    result = await session.execute(
-        select(Pet).where(Pet.user_id == current_user.id)
-    )
-    return result.scalars().all()
+    try:
+        current_user.name = update_data.name
+        current_user.email = update_data.email
+        await session.commit()
+        await session.refresh(current_user)
+        return current_user
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/pets", response_model=PetResponse)
@@ -339,11 +321,118 @@ async def create_pet(
         session: SessionDep,
         current_user: Annotated[User, Depends(get_current_user)]
 ):
-    new_pet = Pet(**pet.model_dump(), user_id=current_user.id)
-    session.add(new_pet)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Неверный токен")
+
+    try:
+        # Создаем нового питомца
+        new_pet = Pet(**pet.model_dump())
+        session.add(new_pet)
+        await session.flush()  # Получаем ID нового питомца
+
+        # Явно добавляем связь в ассоциативную таблицу
+        stmt = user_pet_association.insert().values(
+            user_id=current_user.id,
+            pet_id=new_pet.id
+        )
+        await session.execute(stmt)
+
+        await session.commit()
+        await session.refresh(new_pet)
+        return new_pet
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=422,
+            detail=f"Ошибка создания питомца: {str(e)}"
+        )
+
+
+@app.get("/pets", response_model=List[PetResponse])
+async def get_user_pets(
+    session: SessionDep,
+    current_user: Annotated[User, Depends(get_current_user)]
+):
+    result = await session.execute(
+        select(Pet)
+        .join(user_pet_association, Pet.id == user_pet_association.c.pet_id)
+        .where(user_pet_association.c.user_id == current_user.id)
+    )
+    return result.scalars().all()
+
+
+@app.post("/pets/{pet_id}/users/{user_id}")
+async def add_user_to_pet(
+        pet_id: int,
+        user_id: int,
+        session: SessionDep,
+        current_user: Annotated[User, Depends(get_current_user)]
+):
+    pet = await session.get(Pet, pet_id)
+    if not pet:
+        raise HTTPException(status_code=404, detail="Питомец не найден")
+
+    result = await session.execute(
+        select(user_pet_association)
+        .where(user_pet_association.c.user_id == current_user.id)
+        .where(user_pet_association.c.pet_id == pet_id)
+    )
+    if not result.scalar():
+        raise HTTPException(status_code=403, detail="Нет доступа к питомцу")
+
+    user_to_add = await session.get(User, user_id)
+    if not user_to_add:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    result = await session.execute(
+        select(user_pet_association)
+        .where(user_pet_association.c.user_id == user_id)
+        .where(user_pet_association.c.pet_id == pet_id)
+    )
+    if result.scalar():
+        raise HTTPException(status_code=400, detail="Пользователь уже добавлен")
+
+    await session.execute(
+        user_pet_association.insert().values(user_id=user_id, pet_id=pet_id)
+    )
     await session.commit()
-    await session.refresh(new_pet)
-    return new_pet
+    return {"status": "Пользователь успешно добавлен"}
+
+
+@app.delete("/pets/{pet_id}/users/{user_id}")
+async def remove_user_from_pet(
+        pet_id: int,
+        user_id: int,
+        session: SessionDep,
+        current_user: Annotated[User, Depends(get_current_user)]
+):
+    pet = await session.get(Pet, pet_id)
+    if not pet:
+        raise HTTPException(status_code=404, detail="Питомец не найден")
+
+    result = await session.execute(
+        select(user_pet_association)
+        .where(user_pet_association.c.user_id == current_user.id)
+        .where(user_pet_association.c.pet_id == pet_id)
+    )
+    if not result.scalar():
+        raise HTTPException(status_code=403, detail="Нет доступа к питомцу")
+
+    result = await session.execute(
+        select(user_pet_association)
+        .where(user_pet_association.c.user_id == user_id)
+        .where(user_pet_association.c.pet_id == pet_id)
+    )
+    if not result.scalar():
+        raise HTTPException(status_code=404, detail="Связь не найдена")
+
+    await session.execute(
+        delete(user_pet_association)
+        .where(user_pet_association.c.user_id == user_id)
+        .where(user_pet_association.c.pet_id == pet_id)
+    )
+    await session.commit()
+    return {"status": "Пользователь успешно удален"}
 
 
 @app.get("/reminders", response_model=List[ReminderResponse])
@@ -355,12 +444,48 @@ async def get_reminders(
 ):
     result = await session.execute(
         select(Reminder)
-        .join(Pet)
-        .where(Pet.user_id == current_user.id)
+        .join(Pet, Reminder.pet_id == Pet.id)
+        .join(user_pet_association, Pet.id == user_pet_association.c.pet_id)
+        .where(user_pet_association.c.user_id == current_user.id)
         .where(Reminder.reminder_date >= start)
         .where(Reminder.reminder_date <= end)
     )
     return result.scalars().all()
+
+
+@app.post("/reminders", response_model=ReminderResponse)
+async def create_reminder(
+        reminder: ReminderCreate,
+        session: SessionDep,
+        current_user: Annotated[User, Depends(get_current_user)]
+):
+    result = await session.execute(
+        select(user_pet_association)
+        .where(user_pet_association.c.user_id == current_user.id)
+        .where(user_pet_association.c.pet_id == reminder.pet_id)
+    )
+    if not result.scalar():
+        raise HTTPException(status_code=403, detail="Нет доступа к питомцу")
+
+    new_reminder = Reminder(**reminder.model_dump())
+    session.add(new_reminder)
+    await session.commit()
+    await session.refresh(new_reminder)
+    return new_reminder
+
+
+@app.post("/users/change-password")
+async def change_password(
+        change_data: ChangePasswordRequest,
+        current_user: Annotated[User, Depends(get_current_user)],
+        session: SessionDep
+):
+    if not pwd_context.verify(change_data.old_password, current_user.password):
+        raise HTTPException(status_code=400, detail="Неверный текущий пароль")
+
+    current_user.password = pwd_context.hash(change_data.new_password)
+    await session.commit()
+    return {"status": "Пароль успешно изменен"}
 
 
 # Запуск приложения

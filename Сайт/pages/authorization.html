@@ -1,24 +1,20 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
+    <!-- Мета-теги для корректного отображения и кодировки -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PetCare - Авторизация</title>
-    
-        <style>
-        :root {
-            --primary-color: #213568;
-            --accent-color: #D2C639;
-            --dark-bg: #0B122F;
-            --text-color: white;
-        }
 
+    <!-- Стили для страницы -->
+    <style>
+        /* Основные стили для body */
         body {
             margin: 0;
             padding: 1.25rem;
-            background: var(--primary-color);
-            color: var(--text-color);
-            font-family: system-ui, -apple-system, sans-serif;
+            background: #213568; /* Основной цвет фона */
+            color: white; /* Цвет текста */
+            font-family: system-ui, -apple-system, sans-serif; /* Шрифт */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -26,6 +22,7 @@
             box-sizing: border-box;
         }
 
+        /* Контейнер для содержимого */
         .container {
             width: 90%;
             max-width: 25rem; /* 400px */
@@ -35,6 +32,7 @@
             margin: auto;
         }
 
+        /* Логотип */
         .logo {
             width: min(90%, 9.375rem); /* 150px */
             height: auto;
@@ -43,14 +41,16 @@
             object-fit: contain;
         }
 
+        /* Заголовок */
         .title {
-            color: var(--text-color);
-            font-size: clamp(1.5rem, 5vw, 1.875rem);
+            color: white;
+            font-size: clamp(1.5rem, 5vw, 1.875rem); /* Адаптивный размер шрифта */
             text-align: center;
             margin: 1.25rem 0 2.5rem;
             transition: all 0.3s ease;
         }
 
+        /* Группа для полей ввода */
         .input-group {
             display: flex;
             align-items: center;
@@ -63,24 +63,27 @@
             transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+        /* Видимая группа для полей ввода */
         .input-group.visible {
             max-height: 3.75rem; /* 60px */
             opacity: 1;
         }
 
+        /* Поле ввода */
         .input-field {
-            color: var(--text-color);
+            color: white;
             width: 100%;
             max-width: 25rem; /* 400px */
             height: 2.5rem;
             border-radius: 1.25rem;
-            border: 1px solid var(--dark-bg);
+            border: 1px solid #0B122F; /* Темный цвет границы */
             padding: 0 0.9375rem;
             font-size: 1rem;
-            background: var(--dark-bg);
+            background: #0B122F; /* Темный цвет фона */
             transition: all 0.3s ease;
         }
 
+        /* Контейнер для кнопок */
         .buttons-container {
             display: flex;
             flex-direction: column;
@@ -90,6 +93,7 @@
             width: 100%;
         }
 
+        /* Общие стили для кнопок */
         .btn {
             padding: 1em 2.5em;
             font-size: 1.25rem;
@@ -101,23 +105,27 @@
             max-width: 20rem;
         }
 
+        /* Анимация при нажатии на кнопку */
         .btn:active {
             transform: scale(0.95);
         }
 
+        /* Основная кнопка */
         .primary-btn {
-            background: var(--accent-color);
-            color: var(--primary-color);
+            background: #D2C639; /* Акцентный цвет */
+            color: #213568; /* Основной цвет текста */
         }
 
+        /* Вторичная кнопка */
         .secondary-btn {
             background: none;
-            color: var(--accent-color);
+            color: #D2C639; /* Акцентный цвет */
             text-decoration: underline;
             font-size: 0.875rem;
             padding: 0.5em;
         }
 
+        /* Адаптивные стили для мобильных устройств */
         @media (max-width: 48rem) { /* 768px */
             .btn {
                 font-size: 1.1rem;
@@ -150,27 +158,40 @@
     </style>
 </head>
 <body>
+    <!-- Контейнер для содержимого -->
     <div class="container">
+        <!-- Логотип -->
         <img src="/Сайт/photos/icon.png" class="logo" alt="Логотип">
+        
+        <!-- Заголовок -->
         <h1 class="title" id="formTitle">Вход</h1>
         
+        <!-- Поле для ввода email -->
         <div class="input-group visible">
             <input type="email" class="input-field" placeholder="Email" id="email">
         </div>
         
+        <!-- Поле для ввода пароля -->
         <div class="input-group visible">
             <input type="password" class="input-field" placeholder="Пароль" id="password">
         </div>
 
+        <!-- Контейнер для кнопок -->
         <div class="buttons-container" id="buttonsContainer">
+            <!-- Кнопка для входа -->
             <button class="btn primary-btn" onclick="login()">Войти</button>
+            
+            <!-- Кнопка для перехода к регистрации -->
             <button class="btn secondary-btn" onclick="showRegistration()">Зарегистрироваться</button>
         </div>
     </div>
 
+    <!-- Скрипты для работы страницы -->
     <script>
+        // Базовый URL API
         const API_URL = 'http://127.0.0.1:8000';
 
+        // Функция для обработки ответа от сервера
         async function handleResponse(response) {
             if (!response.ok) {
                 const errorText = await response.text();
@@ -179,11 +200,13 @@
             return response.json();
         }
 
+        // Функция для входа пользователя
         async function login() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             
             try {
+                // Отправка запроса на сервер для получения токена
                 const response = await fetch(`${API_URL}/token`, {
                     method: 'POST',
                     headers: {
@@ -192,20 +215,28 @@
                     body: `username=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`
                 });
                 
+                // Обработка ответа
                 const data = await handleResponse(response);
-                localStorage.setItem('token', data.access_token);
+                
+                // Сохранение токена в localStorage
+                localStorage.setItem('access_token', data.access_token);
+                alert(data.access_token)
+                // Перенаправление на главную страницу
                 window.location.href = '/Сайт/pages/general.html';
             } catch (error) {
+                // Обработка ошибок
                 alert(error.message);
             }
         }
 
+        // Функция для регистрации пользователя
         async function register() {
             const name = document.getElementById('name').value;
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
 
             try {
+                // Отправка запроса на сервер для регистрации
                 const response = await fetch(`${API_URL}/register`, {
                     method: 'POST',
                     headers: {
@@ -218,24 +249,36 @@
                     })
                 });
                 
+                // Обработка ответа
                 await handleResponse(response);
+                
+                // Уведомление об успешной регистрации
                 alert('Регистрация успешна!');
+                
+                // Перенаправление на страницу авторизации
                 window.location.href = '/Сайт/pages/authorization.html';
             } catch (error) {
+                // Обработка ошибок
                 alert(error.message);
             }
         }
 
+        // Функция для перехода к форме регистрации
         function showRegistration() {
+            // Изменение заголовка
             document.getElementById('formTitle').textContent = 'Регистрация';
             
+            // Создание поля для ввода имени
             const nameInput = document.createElement('div');
             nameInput.className = 'input-group';
             nameInput.innerHTML = `<input type="text" class="input-field" placeholder="Имя" id="name">`;
             document.querySelector('.container').insertBefore(nameInput, document.getElementById('buttonsContainer'));
             
+            // Анимация появления поля
             setTimeout(() => {
                 nameInput.classList.add('visible');
+                
+                // Изменение кнопок
                 document.getElementById('buttonsContainer').innerHTML = `
                     <button class="btn primary-btn" onclick="register()">Зарегистрироваться</button>
                     <button class="btn secondary-btn" onclick="window.location.reload()">Назад</button>
