@@ -774,7 +774,7 @@ function showToast(message, type = 'info') {
                         <i class="fas fa-users stat-icon"></i>
                         <span class="stat-value">${pet.owners_count || 1}</span>
                     </div>
-                    <button class="action-btn edit-btn" onclick="editPet(event, ${pet.id})">✏️ Изменить</button>
+                    <button class="action-btn edit-btn" onclick="event.stopPropagation(); navigateToPet(${pet.id}, true)"">✏️ Изменить</button>
                 </div>
             </div>
         `).join('');
@@ -782,7 +782,10 @@ function showToast(message, type = 'info') {
         console.error('Ошибка загрузки питомцев:', error);
     }
 }
-
+function navigateToPet(petId, isEdit = false) {
+    const baseUrl = `pet.html?id=${petId}`;
+    window.location.href = isEdit ? `${baseUrl}&edit=true` : baseUrl;
+}
 function getPetTypeClass(petType) {
     const types = {
         'Кошка': 'cat',

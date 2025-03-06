@@ -6,7 +6,7 @@ from sqlalchemy import (
     Column, Integer, String, Float, Date, DateTime,
     ForeignKey, Boolean, Table, select, delete
 )
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.orm import relationship, declarative_base, selectinload
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
     async_sessionmaker,
@@ -182,6 +182,67 @@ class ReminderResponse(ReminderBase):
         from_attributes = True
 
 
+class HealthRecordResponse(BaseModel):
+    id: int
+    record_date: date
+    weight: float
+    description: str
+
+    class Config:
+        from_attributes = True
+
+
+class VaccinationResponse(BaseModel):
+    id: int
+    name: str
+    date_administered: date
+    next_date: Optional[date]
+    repeated: bool
+
+    class Config:
+        from_attributes = True
+
+
+class FeedingScheduleResponse(BaseModel):
+    id: int
+    pet_id: int
+    feeding_time: datetime
+    food_type: str
+    quantity: str
+    notes: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PetUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    breed: Optional[str] = None
+    birth_date: Optional[date] = None
+    gender: Optional[Literal["male", "female", "other"]] = None
+    age: Optional[int] = None
+
+
+class HealthRecordCreate(BaseModel):
+    weight: float
+    description: str
+
+
+class VaccinationCreate(BaseModel):
+    name: str
+    date_administered: date
+    next_date: Optional[date] = None
+    repeated: bool = False
+
+
+class FeedingScheduleCreate(BaseModel):
+    feeding_time: datetime
+    food_type: str
+    quantity: str
+    notes: Optional[str] = None
+
+
 class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str = Field(..., min_length=6, max_length=255)
@@ -298,11 +359,12 @@ async def login_for_access_token(
 async def read_users_me(current_user: Annotated[User, Depends(get_current_user)]):
     return current_user
 
+
 @app.patch("/users/me", response_model=UserResponse)
 async def update_user_profile(
-    update_data: UserBase,
-    session: SessionDep,
-    current_user: Annotated[User, Depends(get_current_user)]
+        update_data: UserBase,
+        session: SessionDep,
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     try:
         current_user.name = update_data.name
@@ -386,8 +448,8 @@ async def delete_pet(
 
 @app.get("/pets", response_model=List[PetResponse])
 async def get_user_pets(
-    session: SessionDep,
-    current_user: Annotated[User, Depends(get_current_user)]
+        session: SessionDep,
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     result = await session.execute(
         select(Pet)
@@ -471,21 +533,82 @@ async def remove_user_from_pet(
     return {"status": "Пользователь успешно удален"}
 
 
-@app.get("/reminders", response_model=List[ReminderResponse])
-async def get_reminders(
-        start: date,
-        end: date,
+async def check_pet_access(pet_id: int, user_id: int, session: AsyncSession):
+    result = await session.execute(
+        select(user_pet_association)
+        .where(user_pet_association.c.user_id == user_id)
+        .where(user_pet_association.c.pet_id == pet_id)
+    )
+    if not result.scalar():
+        raise HTTPException(status_code=403, detail="Нет доступа к питомцу")
+
+
+@app.get("/pets/{pet_id}", response_model=PetResponse)
+async def get_pet(
+        pet_id: int,
         session: SessionDep,
         current_user: Annotated[User, Depends(get_current_user)]
 ):
+    await check_pet_access(pet_id, current_user.id, session)
+
+    # Явная загрузка связанных данных
     result = await session.execute(
-        select(Reminder)
-        .join(Pet, Reminder.pet_id == Pet.id)
-        .join(user_pet_association, Pet.id == user_pet_association.c.pet_id)
-        .where(user_pet_association.c.user_id == current_user.id)
-        .where(Reminder.reminder_date >= start)
-        .where(Reminder.reminder_date <= end)
+        select(Pet)
+        .where(Pet.id == pet_id)
+        .options(
+            selectinload(Pet.health_records),
+            selectinload(Pet.vaccinations),
+            selectinload(Pet.feeding_schedules)
+        )
     )
+    pet = result.scalar()
+
+    if not pet:
+        raise HTTPException(status_code=404, detail="Питомец не найден")
+    return pet
+
+
+@app.get("/pets/{pet_id}/health-records", response_model=List[HealthRecordResponse])
+async def get_health_records(
+        pet_id: int,
+        session: SessionDep,
+        current_user: Annotated[User, Depends(get_current_user)]
+):
+    await check_pet_access(pet_id, current_user.id, session)
+    result = await session.execute(select(HealthRecord).where(HealthRecord.pet_id == pet_id))
+    return result.scalars().all()
+
+
+@app.get("/pets/{pet_id}/vaccinations", response_model=List[VaccinationResponse])
+async def get_vaccinations(
+        pet_id: int,
+        session: SessionDep,
+        current_user: Annotated[User, Depends(get_current_user)]
+):
+    await check_pet_access(pet_id, current_user.id, session)
+    result = await session.execute(select(Vaccination).where(Vaccination.pet_id == pet_id))
+    return result.scalars().all()
+
+
+@app.get("/pets/{pet_id}/feeding-schedules", response_model=List[FeedingScheduleResponse])
+async def get_feeding_schedules(
+        pet_id: int,
+        session: SessionDep,
+        current_user: Annotated[User, Depends(get_current_user)]
+):
+    await check_pet_access(pet_id, current_user.id, session)
+    result = await session.execute(select(FeedingSchedule).where(FeedingSchedule.pet_id == pet_id))
+    return result.scalars().all()
+
+
+@app.get("/pets/{pet_id}/reminders", response_model=List[ReminderResponse])
+async def get_pet_reminders(
+        pet_id: int,
+        session: SessionDep,
+        current_user: Annotated[User, Depends(get_current_user)]
+):
+    await check_pet_access(pet_id, current_user.id, session)
+    result = await session.execute(select(Reminder).where(Reminder.pet_id == pet_id))
     return result.scalars().all()
 
 
@@ -508,6 +631,75 @@ async def create_reminder(
     await session.commit()
     await session.refresh(new_reminder)
     return new_reminder
+
+
+@app.put("/pets/{pet_id}", response_model=PetResponse)
+async def update_pet(
+        pet_id: int,
+        pet_data: PetUpdate,
+        session: SessionDep,
+        current_user: Annotated[User, Depends(get_current_user)]
+):
+    await check_pet_access(pet_id, current_user.id, session)
+
+    pet = await session.get(Pet, pet_id)
+    if not pet:
+        raise HTTPException(status_code=404, detail="Питомец не найден")
+
+    for field, value in pet_data.model_dump(exclude_unset=True).items():
+        setattr(pet, field, value)
+
+    await session.commit()
+    await session.refresh(pet)
+    return pet
+
+
+@app.post("/pets/{pet_id}/health-records", response_model=HealthRecordResponse)
+async def create_health_record(
+        pet_id: int,
+        record_data: HealthRecordCreate,
+        session: SessionDep,
+        current_user: Annotated[User, Depends(get_current_user)]
+):
+    await check_pet_access(pet_id, current_user.id, session)
+
+    new_record = HealthRecord(**record_data.model_dump(), pet_id=pet_id)
+    session.add(new_record)
+    await session.commit()
+    await session.refresh(new_record)
+    return new_record
+
+
+@app.post("/pets/{pet_id}/vaccinations", response_model=VaccinationResponse)
+async def create_vaccination(
+        pet_id: int,
+        vax_data: VaccinationCreate,
+        session: SessionDep,
+        current_user: Annotated[User, Depends(get_current_user)]
+):
+    await check_pet_access(pet_id, current_user.id, session)
+
+    new_vax = Vaccination(**vax_data.model_dump(), pet_id=pet_id)
+    session.add(new_vax)
+    await session.commit()
+    await session.refresh(new_vax)
+    return new_vax
+
+
+@app.post("/pets/{pet_id}/feeding-schedules", response_model=FeedingScheduleResponse)
+async def create_feeding_schedule(
+        pet_id: int,
+        feeding_data: FeedingScheduleCreate,
+        session: SessionDep,
+        current_user: Annotated[User, Depends(get_current_user)]
+):
+    await check_pet_access(pet_id, current_user.id, session)
+
+    new_feeding = FeedingSchedule(**feeding_data.model_dump(), pet_id=pet_id)
+    session.add(new_feeding)
+    await session.commit()
+    await session.refresh(new_feeding)
+    return new_feeding
 
 
 @app.post("/users/change-password")

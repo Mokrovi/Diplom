@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Информация о питомце</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        /* Глобальные стили */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Arial', sans-serif;
+        }
+    
+        body {
+            background-color: #213568;
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .history-item {
+    animation: slideIn 0.3s ease;
+}
+.history-item {
+    padding: 15px;
+    margin-bottom: 15px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 8px;
+    border-left: 3px solid #D2C639;
+}
+
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.history-date {
+    color: #D2C639;
+    font-size: 0.9em;
+    min-width: 120px;
+    text-align: right;
+}
+
+.history-content {
+    flex-grow: 1;
+    margin-right: 20px;
+}
+.history-list {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.history-next {
+    color: #4CAF50;
+    font-size: 0.9em;
+    margin-top: 5px;
+}
+        /* Кнопка назад */
+        .back-button {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: #D2C639;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+        .last-record {
+    background: rgba(255,255,255,0.05);
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.last-record-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.last-record-value {
+    font-size: 1.4em;
+    color: #D2C639;
+}
+        .back-button:hover {
+            transform: scale(1.1);
+        }
+    
+        /* Основная секция */
+        .pet-section {
+            max-width: 1200px;
+            margin: 50px auto 0;
+            padding: 0 20px;
+        }
+    
+        .pet-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+    
+        .pet-name {
+            color: #D2C639;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+    
+        /* Сетка карточек */
+        .pet-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+    
+        /* Карточки информации */
+        .info-card {
+            background: #2a3f7a;
+            border-radius: 15px;
+            padding: 25px;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+    
+        .info-card.edit-mode {
+            border: 2px solid #D2C639;
+            box-shadow: 0 0 15px rgba(210, 198, 57, 0.3);
+        }
+    
+        .card-title {
+            color: #D2C639;
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+    
+        /* Элементы информации */
+        .info-item {
+            margin-bottom: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid #3a4f8a;
+        }
+    
+        .info-label {
+            color: #D2C639;
+            font-weight: 500;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+    
+        .info-value {
+            color: white;
+            font-size: 1.1em;
+        }
+    
+        /* Статусы */
+        .vaccine-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #4CAF50;
+        }
+    
+        .status-icon {
+            font-size: 1.2em;
+        }
+    
+        /* График кормления */
+        .feeding-schedule {
+            display: grid;
+            gap: 15px;
+        }
+    
+        .feeding-time {
+            background: #3a4f8a;
+            padding: 12px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+    
+        .time-icon {
+            color: #D2C639;
+            font-size: 1.5em;
+        }
+    
+        /* Напоминания */
+        .reminder-card {
+            background: #3a4f8a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            opacity: 0.9;
+            transition: all 0.3s ease;
+        }
+    
+        .reminder-card.completed {
+            opacity: 0.6;
+        }
+    
+        .reminder-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+    
+        .reminder-date {
+            color: #D2C639;
+            font-size: 0.9em;
+        }
+    
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #4CAF50;
+        }
+    
+        .status-indicator.completed {
+            background: #E0536B;
+        }
+    
+        /* Режим редактирования */
+        .edit-form {
+            display: grid;
+            gap: 15px;
+        }
+    
+        /* Модальные окна */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            backdrop-filter: blur(3px);
+        }
+    
+        .modal-content {
+            background: #2a3f7a;
+            border-radius: 15px;
+            padding: 25px;
+            width: 90%;
+            max-width: 500px;
+            position: relative;
+        }
+    
+        /* Кнопки */
+        .btn {
+            padding: 8px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+    
+        .btn-primary {
+            background: #D2C639;
+            color: #213568;
+        }
+    
+        .btn-primary:hover {
+            background: #b8ab32;
+        }
+    
+        .btn-secondary {
+            background: #3a4f8a;
+            color: white;
+            border: 1px solid #D2C639;
+        }
+    
+        .btn-secondary:hover {
+            background: #2e3d6b;
+        }
+    
+        /* Формы */
+        .form-group {
+            margin-bottom: 15px;
+        }
+    
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #D2C639;
+        }
+    
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #40538a;
+            background: #1a2a4f;
+            color: white;
+            font-size: 14px;
+        }
+    
+        input:focus, select:focus, textarea:focus {
+            outline: 2px solid #D2C639;
+        }
+
+        .card-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+            margin-left: auto;
+            order: 2; /* Перемещает кнопки в конец */
+        }
+        .info-fields .info-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.05);
+            margin-bottom: 8px;
+        }
+        .title-content {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        }
+        .history-item {
+    padding: 15px;
+    margin-bottom: 15px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 8px;
+    border-left: 3px solid #D2C639;
+}
+
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.history-date {
+    color: #D2C639;
+    font-size: 0.9em;
+    min-width: 120px;
+    text-align: right;
+}
+
+.history-content {
+    flex-grow: 1;
+    margin-right: 20px;
+}
+
+/* Для мобилок */
+@media (max-width: 480px) {
+    .history-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .history-date {
+        text-align: left;
+        margin-top: 5px;
+    }
+}
+        /* Для мобилок */
+        @media (max-width: 768px) {
+        .card-title {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        
+        .actions {
+            margin-left: 0;
+            width: 100%;
+            justify-content: flex-end;
+        }
+        }
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            .pet-name {
+                font-size: 2em;
+            }
+    
+            .pet-info-grid {
+                grid-template-columns: 1fr;
+            }
+    
+            .modal-content {
+                padding: 15px;
+            }
+        }
+    
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+    
+            .pet-section {
+                margin-top: 30px;
+            }
+    
+            .info-card {
+                padding: 15px;
+            }
+        }
+    
+        /* Анимации */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Кнопка назад -->
+        <div class="back-button" @click="goBack">←</div>
+        
+        <!-- Лоадер -->
+        <div v-if="loading" class="loading">Загрузка данных...</div>
+        
+        <!-- Основной контент -->
+        <div v-else class="pet-section">
+            <!-- Заголовок -->
+            <div class="pet-header">
+                <h1 class="pet-name">{{ pet.name }}</h1>
+            </div>
+
+            <!-- Основная информация -->
+            <div class="pet-info-grid">
+                <!-- Основная инфа с редактированием -->
+                <div class="info-card">
+                    <div class="card-title">
+                        <i class="fas fa-paw"></i>
+                        Основная информация
+                        <div class="actions">
+                            <button v-if="!isEditing" @click="isEditing = true" class="btn btn-primary">
+                                ✏️ Редактировать
+                            </button>
+                            <button v-else @click="savePet" class="btn btn-primary">
+                                💾 Сохранить
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Режим просмотра -->
+                    <div v-if="!isEditing" class="info-fields">
+                        <div class="info-item">
+                            <div class="info-label">Имя</div>
+                            <div class="info-value">{{ pet.name }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Порода</div>
+                            <div class="info-value">{{ pet.breed || '—' }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Дата рождения</div>
+                            <div class="info-value">{{ formatDate(pet.birth_date) || '—' }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Пол</div>
+                            <div class="info-value">{{ genderLabel(pet.gender) }}</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Режим редактирования -->
+                    <div v-else class="edit-form">
+                        <div class="form-group">
+                            <label>Имя:</label>
+                            <input type="text" v-model="editPet.name">
+                        </div>
+                        <div class="form-group">
+                            <label>Тип:</label>
+                            <select v-model="editPet.type">
+                                <option value="Собака">Собака</option>
+                                <option value="Кошка">Кошка</option>
+                                <option value="Грызун">Грызун</option>
+                                <option value="Птица">Птица</option>
+                                <option value="Другое">Другое</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Пол:</label>
+                            <select v-model="editPet.gender">
+                                <option value="male">Мужской</option>
+                                <option value="female">Женский</option>
+                                <option value="other">Другой</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Дата рождения:</label>
+                            <input type="date" v-model="editPet.birth_date">
+                        </div>
+                        <div class="form-group">
+                            <label>Порода:</label>
+                            <input type="text" v-model="editPet.breed">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Здоровье -->
+                <div class="info-card">
+                    <div class="card-title">
+                        <i class="fas fa-heartbeat"></i>
+                        Здоровье
+                        <div class="actions">
+                            <button @click="showDetails('health')" class="btn btn-secondary">
+                                📋 Подробнее
+                            </button>
+                            <button @click="showModal('health')" class="btn btn-primary">
+                                ➕ Добавить
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div v-if="lastHealthRecord" class="info-item">
+                        <div class="info-label">
+                            {{ formatDate(lastHealthRecord.record_date) }}
+                        </div>
+                        <div class="info-value">
+                            {{ lastHealthRecord.weight }} кг
+                            <div class="info-note">{{ lastHealthRecord.description }}</div>
+                        </div>
+                    </div>
+                    <div v-else class="info-value">Нет записей</div>
+                </div>
+
+            <!-- Вторая строка блоков -->
+            <div class="info-card">
+                <div class="card-title">
+                    <i class="fas fa-syringe"></i>
+                    Прививки
+                    <div class="actions">
+                        <button @click="showDetails('vaccinations')" class="btn btn-secondary">
+                            📋 Подробнее
+                        </button>
+                        <button @click="showModal('vaccinations')" class="btn btn-primary">
+                            ➕ Добавить
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Вставить сюда -->
+                <div v-if="lastVaccination" class="info-item">
+                    <div class="info-label">{{ lastVaccination.name }}</div>
+                    <div class="info-value">
+                        {{ formatDate(lastVaccination.date_administered) }}
+                        <span v-if="lastVaccination.next_date" class="vaccine-status">
+                            <i class="fas fa-redo status-icon"></i>
+                            {{ formatDate(lastVaccination.next_date) }}
+                        </span>
+                    </div>
+                </div>
+                <div v-else class="info-value">Нет данных</div>
+            </div>
+
+                <!-- Кормление -->
+                <div class="info-card">
+                    <div class="card-title">
+                        <i class="fas fa-utensils"></i>
+                        Кормление
+                        <div class="actions">
+                            <button @click="showDetails('feeding')" class="btn btn-secondary">
+                                📋 Подробнее
+                            </button>
+                            <button @click="showModal('feeding')" class="btn btn-primary">
+                                ➕ Добавить
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Вставить сюда -->
+                    <div class="feeding-schedule">
+                        <div v-if="lastFeeding" class="feeding-time">
+                            <i class="fas fa-clock time-icon"></i>
+                            <div>
+                                <div class="info-label">{{ formatTime(lastFeeding.feeding_time) }}</div>
+                                <div class="info-value">{{ lastFeeding.food_type }} ({{ lastFeeding.quantity }})</div>
+                                <div class="info-note" v-if="lastFeeding.notes">{{ lastFeeding.notes }}</div>
+                            </div>
+                        </div>
+                        <div v-else class="info-value">График не настроен</div>
+                    </div>
+                </div>
+
+            <!-- Напоминания -->
+            <div class="info-card">
+                <div class="card-title">
+                    <i class="fas fa-bell"></i>
+                    Напоминания
+                    <div class="actions">
+                        <button @click="showDetails('reminders')" class="btn btn-secondary">
+                          📋 Подробнее
+                        </button>
+                        <button @click="showModal('reminders')" class="btn btn-primary">
+                          ➕ Добавить
+                        </button>
+                      </div>
+                </div>
+                <div class="reminder-card" 
+                     v-for="reminder in reminders" 
+                     :key="reminder.id"
+                     :class="{completed: reminder.is_completed}">
+                    <div class="reminder-header">
+                        <div class="reminder-date">{{ formatDateTime(reminder.reminder_date) }}</div>
+                        <div class="status-indicator" :class="{completed: reminder.is_completed}"></div>
+                    </div>
+                    <div class="info-value">{{ reminder.description }}</div>
+                </div>
+                <div v-if="reminders.length === 0" class="info-value">Нет напоминаний</div>
+            </div>
+        </div>
+
+        <!-- Модальные окна -->
+        <div v-if="activeModal" class="modal-overlay">
+            <div class="modal-content">
+                <component 
+                        :is="modalComponent" 
+                        :history="currentHistory"    
+                        @close="closeModal"  
+                        @save="handleSave"
+                />
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    
+    <script>
+        const { createApp } = Vue;
+        const API_URL = 'http://localhost:8000';
+    
+        // Компоненты для добавления записей
+        const HealthModal = {
+    template: `
+        <div>
+            <h3>Новая запись о здоровье</h3>
+            <div class="form-group">
+                <label>Дата записи:</label>
+                <input type="date" v-model="newData.record_date" required>
+            </div>
+            <div class="form-group">
+                <label>Вес (кг):</label>
+                <input type="number" step="0.1" v-model="newData.weight" required>
+            </div>
+            <div class="form-group">
+                <label>Описание:</label>
+                <textarea v-model="newData.description" required></textarea>
+            </div>
+            <div class="actions">
+                <button @click="$emit('close')" class="btn btn-secondary">Отмена</button>
+                <button @click="handleSave" class="btn btn-primary">Сохранить</button>
+            </div>
+        </div>
+    `,
+    data() {
+        return {
+            newData: {
+                record_date: new Date().toISOString().split('T')[0],
+                weight: null,
+                description: ''
+            }
+        }
+    },
+    methods: {
+        handleSave() {
+            if(this.validate()) {
+                this.$emit('save', this.newData);
+            }
+        },
+        validate() {
+            let isValid = true;
+            const errors = [];
+            
+            if(!this.newData.record_date) {
+                errors.push('Укажите дату записи');
+                isValid = false;
+            }
+            
+            if(!this.newData.weight || this.newData.weight <= 0) {
+                errors.push('Введите корректный вес');
+                isValid = false;
+            }
+            
+            if(!this.newData.description.trim()) {
+                errors.push('Добавьте описание');
+                isValid = false;
+            }
+            
+            if(errors.length > 0) {
+                alert(errors.join('\n'));
+            }
+            
+            return isValid;
+        }
+    }
+};
+    
+    const VaccinationModal = { 
+        template: `
+            <div>
+                <h3>Новая прививка</h3>
+                <div class="form-group">
+                    <label>Название:</label>
+                    <input type="text" v-model="newData.name" required>
+                </div>
+                <div class="form-group">
+                    <label>Дата введения:</label>
+                    <input type="date" v-model="newData.date_administered" required>
+                </div>
+                <div class="form-group">
+                    <label>Следующая дата:</label>
+                    <input type="date" v-model="newData.next_date">
+                </div>
+                <div class="actions">
+                    <button @click="$emit('close')" class="btn btn-secondary">Отмена</button>
+                    <button @click="handleSave" class="btn btn-primary">Сохранить</button>
+                </div>
+            </div>
+        `,
+        data() {
+            return { 
+                newData: {
+                    name: '',
+                    date_administered: new Date().toISOString().split('T')[0],
+                    next_date: null
+                } 
+            }
+        },
+        methods: {
+            handleSave() {
+                if(this.newData.name.trim() && this.newData.date_administered) {
+                    this.$emit('save', this.newData);
+                } else {
+                    alert('Заполните обязательные поля');
+                }
+            }
+        }
+    };
+
+    const FeedingModal = { 
+    template: `
+        <div>
+            <h3>Новое кормление</h3>
+            <div class="form-group">
+                <label>Дата и время:</label>
+                <input type="datetime-local" v-model="newData.feeding_time" required>
+            </div>
+            <div class="form-group">
+                <label>Тип корма:</label>
+                <input type="text" v-model="newData.food_type" required>
+            </div>
+            <div class="form-group">
+                <label>Количество:</label>
+                <input type="text" v-model="newData.quantity" required>
+            </div>
+            <div class="form-group">
+                <label>Примечания:</label>
+                <textarea v-model="newData.notes"></textarea>
+            </div>
+            <div class="actions">
+                <button @click="$emit('close')" class="btn btn-secondary">Отмена</button>
+                <button @click="handleSave" class="btn btn-primary">Сохранить</button>
+            </div>
+        </div>
+    `,
+    data() {
+        const now = new Date();
+        const initialDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+            .toISOString()
+            .slice(0, 16);
+            
+        return { 
+            newData: {
+                feeding_time: initialDate,
+                food_type: '',
+                quantity: '',
+                notes: ''
+            } 
+        }
+    },
+    methods: {
+        handleSave() {
+            if(this.validate()) {
+                // Конвертируем в ISO формат
+                const payload = {
+                    ...this.newData,
+                    feeding_time: new Date(this.newData.feeding_time).toISOString()
+                };
+                
+                // Эмитим событие с данными
+                this.$emit('save', payload);
+            }
+        },
+        validate() {
+            let isValid = true;
+            const errors = [];
+            
+            if(!this.newData.food_type.trim()) {
+                errors.push('Укажите тип корма');
+                isValid = false;
+            }
+            
+            if(!this.newData.quantity.trim()) {
+                errors.push('Укажите количество');
+                isValid = false;
+            }
+            
+            if(!this.newData.feeding_time) {
+                errors.push('Укажите дату и время');
+                isValid = false;
+            }
+            
+            if(errors.length > 0) {
+                alert('Ошибки:\n' + errors.join('\n'));
+            }
+            
+            return isValid;
+        }
+    }
+};
+
+    const ReminderModal = { 
+        template: `
+            <div>
+                <h3>Новое напоминание</h3>
+                <div class="form-group">
+                    <label>Дата и время:</label>
+                    <input type="datetime-local" v-model="newData.reminder_date" required>
+                </div>
+                <div class="form-group">
+                    <label>Описание:</label>
+                    <textarea v-model="newData.description" required></textarea>
+                </div>
+                <div class="actions">
+                    <button @click="$emit('close')" class="btn btn-secondary">Отмена</button>
+                    <button @click="handleSave" class="btn btn-primary">Сохранить</button>
+                </div>
+            </div>
+        `,
+        data() {
+            return { 
+                newData: {
+                    reminder_date: new Date().toISOString().slice(0,16),
+                    description: ''
+                } 
+            }
+        },
+        methods: {
+            handleSave() {
+                if(this.newData.description.trim()) {
+                    this.$emit('save', this.newData);
+                } else {
+                    alert('Заполните описание');
+                }
+            }
+        }
+    };
+
+    // Компоненты для просмотра истории
+    const HealthHistoryModal = {
+    template: `
+        <div>
+            <h3>История здоровья</h3>
+            <div class="history-list">
+                <div v-for="record in history" :key="record.id" class="history-item">
+                    <div class="history-header">
+                        <div class="history-content">
+                            <div class="history-weight">{{ record.weight }} кг</div>
+                            <div class="history-description">{{ record.description }}</div>
+                        </div>
+                        <div class="history-date">
+                            {{ formatDate(record.record_date) }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="actions">
+                <button @click="$emit('close')" class="btn btn-primary">Закрыть</button>
+            </div>
+        </div>
+    `,
+    props: ['history'],
+    methods: {
+        formatDate(date) {
+            return new Date(date).toLocaleDateString('ru-RU')
+        }
+    }
+    };
+
+    const VaccinationHistoryModal = {
+    template: `
+        <div>
+            <h3>История прививок</h3>
+            <div class="history-list">
+                <div v-for="vax in history" :key="vax.id" class="history-item">
+                    <div class="history-header">
+                        <div class="history-content">
+                            <div class="history-name">{{ vax.name }}</div>
+                            <div v-if="vax.next_date" class="history-next">
+                                Следующая: {{ formatDate(vax.next_date) }}
+                            </div>
+                        </div>
+                        <div class="history-date">
+                            {{ formatDate(vax.date_administered) }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="actions">
+                <button @click="$emit('close')" class="btn btn-primary">Закрыть</button>
+            </div>
+        </div>
+    `,
+    props: ['history'],
+    methods: {
+        formatDate(date) {
+            return new Date(date).toLocaleDateString('ru-RU');
+        }
+    }
+};
+
+const FeedingHistoryModal = {
+    template: `
+        <div>
+            <h3>История кормлений</h3>
+            <div class="history-list">
+                <div v-for="feeding in history" :key="feeding.id" class="history-item">
+                    <div class="history-header">
+                        <div class="history-content">
+                            <div class="history-food">{{ feeding.food_type }}</div>
+                            <div class="history-details">
+                                {{ feeding.quantity }}
+                                <span v-if="feeding.notes">({{ feeding.notes }})</span>
+                            </div>
+                        </div>
+                        <div class="history-date">
+                            {{ formatDateTime(feeding.feeding_time) }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="actions">
+                <button @click="$emit('close')" class="btn btn-primary">Закрыть</button>
+            </div>
+        </div>
+    `,
+    props: ['history'],
+    methods: {
+        formatDateTime(datetime) {
+            return new Date(datetime).toLocaleString('ru-RU', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            })
+        }
+    }
+    };
+
+    const ReminderHistoryModal = {
+        template: `
+            <div>
+                <h3>История напоминаний</h3>
+                <div class="history-list">
+                    <div v-for="reminder in history" :key="reminder.id" class="history-item">
+                        <div class="history-header">
+                            <span class="history-status" :class="{completed: reminder.is_completed}">
+                                {{ reminder.is_completed ? '✓' : '⌛' }}
+                            </span>
+                            <span class="history-date">{{ formatDateTime(reminder.reminder_date) }}</span>
+                        </div>
+                        <div class="history-description">{{ reminder.description }}</div>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button @click="$emit('close')" class="btn btn-primary">Закрыть</button>
+                </div>
+            </div>
+        `,
+        props: ['history'],
+        methods: {
+            formatDateTime(datetime) {
+                return new Date(datetime).toLocaleString('ru-RU');
+            }
+        }
+    };
+        
+   
+        createApp({
+            components: {
+            HealthModal,
+            VaccinationModal,
+            FeedingModal,
+            ReminderModal,
+            HealthHistoryModal,
+            VaccinationHistoryModal,
+            FeedingHistoryModal,
+            ReminderHistoryModal
+        },
+            data() {
+                return {
+                    isEditing: false,
+                    activeModal: null,
+                    modalType: null,
+                    historyModalType: null,
+                    currentHistory: [],
+                    editPet: {},
+                    petId: null,
+                    pet: {
+                        name: '',
+                        type: '',
+                        breed: '',
+                        birth_date: '',
+                        gender: ''
+                    },                    
+                    healthRecords: [],
+                    vaccinations: [],
+                    feedingSchedules: [],
+                    reminders: [],
+                    loading: true,
+                    token: localStorage.getItem('access_token')
+                }
+            },
+            computed: {
+                lastHealthRecord() {
+                    return this.healthRecords[this.healthRecords.length - 1] || null;
+                },
+                lastVaccination() {
+                    return this.vaccinations.length 
+                        ? this.vaccinations[this.vaccinations.length - 1] 
+                        : null;
+                },
+                lastFeeding() {
+                    return this.feedingSchedules.length 
+                        ? this.feedingSchedules[this.feedingSchedules.length - 1] 
+                        : null;
+                },
+                lastReminder() {
+                    return this.reminders[this.reminders.length - 1] || null;
+                },
+                modalComponent() {
+                    const components = {
+                        // Для добавления записей
+                        health: 'HealthModal',
+                        vaccinations: 'VaccinationModal', // ключ приведен в соответствие
+                        feeding: 'FeedingModal',
+                        reminders: 'ReminderModal', // ключ приведен в соответствие
+                        
+                        // Для истории
+                        healthHistory: 'HealthHistoryModal',
+                        vaccinationsHistory: 'VaccinationHistoryModal', // добавлен s в vaccinations
+                        feedingHistory: 'FeedingHistoryModal',
+                        remindersHistory: 'ReminderHistoryModal' // добавлен s в reminders
+                    };
+                    return components[this.modalType];
+                }
+            },
+            methods: {
+                // Загрузка данных
+                async loadData() {
+                    try {
+                        const headers = { 
+                            Authorization: `Bearer ${this.token}`,
+                            'Content-Type': 'application/json'
+                        };
+
+                        // Все необходимые запросы
+                        const requests = [
+                            axios.get(`${API_URL}/pets/${this.petId}`, { headers }),
+                            axios.get(`${API_URL}/pets/${this.petId}/health-records`, { headers }),
+                            axios.get(`${API_URL}/pets/${this.petId}/vaccinations`, { headers }),
+                            axios.get(`${API_URL}/pets/${this.petId}/feeding-schedules`, { headers }),
+                            axios.get(`${API_URL}/pets/${this.petId}/reminders`, { headers })
+                        ];
+
+                        // Выполняем все запросы параллельно
+                        const [petRes, healthRes, vaxRes, feedingRes, remRes] = await Promise.all(requests);
+
+                        // Обрабатываем результаты
+                        this.pet = petRes.data;
+                        this.healthRecords = healthRes.data;
+                        this.vaccinations = vaxRes.data;
+                        this.feedingSchedules = feedingRes.data;
+                        this.reminders = remRes.data;
+                        this.loading = false;
+
+                    } catch (error) {
+                        console.error('Ошибка загрузки:', error);
+                        this.loading = false;
+                        this.showToast('Ошибка загрузки данных', 'error');
+                        window.location.href = 'general.html';
+                    }
+                },
+                
+                async loadFullHistory(type) {
+                    try {
+                        const endpointMap = {
+                            health: 'health-records',
+                            vaccinations: 'vaccinations', // Исправлено с vaccination на vaccinations
+                            feeding: 'feeding-schedules',
+                            reminders: 'reminders' // Исправлено с reminder на reminders
+                        };
+
+                        const res = await axios.get(
+                            `${API_URL}/pets/${this.petId}/${endpointMap[type]}`,
+                            { headers: { Authorization: `Bearer ${this.token}` } }
+                        );
+                        
+                        return res.data;
+                    } catch (error) {
+                        this.handleError(error);
+                        return [];
+                    }
+                },
+
+                // Сохранение основной информации
+                async savePet() {
+                    try {
+                        const response = await axios.put(
+                            `${API_URL}/pets/${this.petId}`,
+                            {
+                                name: this.editPet.name,
+                                type: this.editPet.type,
+                                breed: this.editPet.breed,
+                                birth_date: new Date(this.editPet.birth_date).toISOString(),
+                                gender: this.editPet.gender
+                            },
+                            { headers: { Authorization: `Bearer ${this.token}` } }
+                        );
+                        this.pet = response.data;
+                        this.isEditing = false;
+                        this.showToast('Данные сохранены!', 'success');
+                    } catch (error) {
+                        this.handleError(error);
+                    }
+                },
+
+                // Обработчик сохранения для всех типов записей
+                async handleSave(data) {
+                    try {
+                        this.loading = true;
+                        const endpoints = {
+                            health: 'health-records',
+                            vaccinations: 'vaccinations',
+                            feeding: 'feeding-schedules',
+                            reminders: 'reminders'
+                        };
+
+                        const endpoint = endpoints[this.modalType];
+                        if (!endpoint) throw new Error('Неизвестный тип записи');
+
+                        const response = await axios.post(
+                            `${API_URL}/pets/${this.petId}/${endpoint}`,
+                            this.prepareData(data),
+                            { headers: { Authorization: `Bearer ${this.token}` } }
+                        );
+
+                        if (response.status !== 201) {
+                            throw new Error('Ошибка сервера при сохранении');
+                        }
+
+                        await this.loadData();
+                        this.showToast('✔️ Запись успешно сохранена', 'success');
+                        
+                    } catch (error) {
+                        this.handleError(error);
+                        console.error('Ошибка сохранения:', error);
+                    } finally {
+                        this.loading = false;
+                        this.closeModal();
+                    }
+                },
+                // Подготовка данных перед отправкой
+                prepareData(data) {
+                    const dateFieldsMap = {
+                        health: { fields: ['record_date'], isDateTime: false },
+                        vaccinations: { fields: ['date_administered', 'next_date'], isDateTime: false },
+                        feeding: { fields: ['feeding_time'], isDateTime: true },
+                        reminders: { fields: ['reminder_date'], isDateTime: true }
+                    };
+
+                    const processed = { ...data };
+                    const config = dateFieldsMap[this.modalType];
+                    
+                    if (config) {
+                        config.fields.forEach(field => {
+                            if (processed[field]) {
+                                const date = new Date(processed[field]);
+                                if (config.isDateTime) {
+                                    processed[field] = date.toISOString();
+                                } else {
+                                    processed[field] = date.toISOString().split('T')[0];
+                                }
+                            }
+                        });
+                    }
+
+                    return processed;
+                },
+
+                // Показ модального окна с историей
+                async showDetails(type) {
+                        try {
+                            this.loading = true;
+                            const history = await this.loadFullHistory(type);
+                            console.log('Loaded history:', history);
+                            this.currentHistory = history;
+                            
+                            const typeMapping = {
+                                health: 'health',
+                                vaccinations: 'vaccinations',
+                                feeding: 'feeding',
+                                reminders: 'reminders'
+                            };
+                            
+                            this.modalType = `${typeMapping[type]}History`;
+                            this.activeModal = true;
+                        } finally {
+                            this.loading = false;
+                        }
+                    },
+                handleError(error) {
+                    const message = error.response?.data?.detail || error.message;
+                    this.showToast(`Ошибка: ${message}`, 'error');
+                },
+                
+                showModal(type) {
+                    this.modalType = type;
+                    this.activeModal = true;
+                },
+    
+                closeModal() {
+                    this.activeModal = null;
+                    this.modalType = null;
+                    this.currentHistory = [];
+                },
+    
+                goBack() {
+                    window.history.back();
+                },
+    
+                formatDate(dateString) {
+                    return dateString ? new Date(dateString).toLocaleDateString('ru-RU') : '—';
+                },
+    
+                formatDateTime(datetimeString) {
+                    return datetimeString ? new Date(datetimeString).toLocaleString('ru-RU') : '—';
+                },
+    
+                formatTime(datetimeString) {
+                    return datetimeString ? 
+                        new Date(datetimeString).toLocaleTimeString('ru-RU', { 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                        }) : '—';
+                },
+    
+                genderLabel(gender) {
+                    const labels = {
+                        'male': 'Мужской',
+                        'female': 'Женский',
+                        'other': 'Другой'
+                    };
+                    return labels[gender] || '—';
+                },
+    
+                
+    
+                showToast(message, type = 'info') {
+                    const toast = document.createElement('div');
+                    toast.className = `toast ${type}`;
+                    toast.textContent = message;
+                    document.body.appendChild(toast);
+                    setTimeout(() => toast.remove(), 3000);
+                }
+            },
+            mounted() {
+                if (!this.token) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+                
+                const urlParams = new URLSearchParams(window.location.search);
+                this.petId = urlParams.get('id');
+                
+                if (!this.petId) {
+                    alert('Питомец не найден');
+                    window.history.back();
+                    return;
+                }
+    
+                this.loadData();
+            },
+            watch: {
+                pet: {
+                    handler(newVal) {
+                        this.editPet = { ...newVal };
+                    },
+                    immediate: true
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
