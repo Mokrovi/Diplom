@@ -73,10 +73,10 @@ class Pet(Base):
     gender = Column(String(10))
     age = Column(Integer)
     users = relationship("User", secondary=user_pet_association, back_populates="pets")
-    health_records = relationship("HealthRecord", back_populates="pet")
-    vaccinations = relationship("Vaccination", back_populates="pet")
-    reminders = relationship("Reminder", back_populates="pet")
-    feeding_schedules = relationship("FeedingSchedule", back_populates="pet")
+    health_records = relationship("HealthRecord", back_populates="pet", cascade="all, delete")
+    vaccinations = relationship("Vaccination", back_populates="pet", cascade="all, delete")
+    reminders = relationship("Reminder", back_populates="pet", cascade="all, delete")
+    feeding_schedules = relationship("FeedingSchedule", back_populates="pet", cascade="all, delete")
 
 
 class HealthRecord(Base):
@@ -346,6 +346,42 @@ async def create_pet(
             status_code=422,
             detail=f"Ошибка создания питомца: {str(e)}"
         )
+
+
+@app.delete("/pets/{pet_id}")
+async def delete_pet(
+        pet_id: int,
+        session: SessionDep,
+        current_user: Annotated[User, Depends(get_current_user)]
+):
+    # Проверяем принадлежность питомца пользователю
+    result = await session.execute(
+        select(user_pet_association)
+        .where(user_pet_association.c.user_id == current_user.id)
+        .where(user_pet_association.c.pet_id == pet_id)
+    )
+    if not result.scalar():
+        raise HTTPException(status_code=403, detail="Нет прав на удаление")
+
+    try:
+        # Удаляем связи в ассоциативной таблице
+        await session.execute(
+            delete(user_pet_association)
+            .where(user_pet_association.c.pet_id == pet_id)
+        )
+
+        # Удаляем самого питомца (каскадное удаление сработает автоматически)
+        await session.execute(
+            delete(Pet)
+            .where(Pet.id == pet_id)
+        )
+
+        await session.commit()
+        return {"status": "Питомец удален"}
+
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(status_code=500, detail=f"Ошибка удаления: {str(e)}")
 
 
 @app.get("/pets", response_model=List[PetResponse])
