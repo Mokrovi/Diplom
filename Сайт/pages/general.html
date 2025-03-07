@@ -14,6 +14,27 @@
 
     <!-- Стили -->
     <style>
+        .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: #2a3f7a;
+    padding: 25px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 400px;
+    position: relative;
+}
         .toast {
     position: fixed;
     bottom: 20px;
@@ -506,6 +527,11 @@
                     <label>Email:</label>
                     <input type="email" id="profile-email" name="email" required>
                 </div>
+                <div class="form-group">
+                    <label>Текущий пароль:</label>
+                    <input type="password" id="profile-password" name="password" required>
+                </div>
+                <div class="form-actions">
                 <div class="form-actions">
                     <button type="submit">Сохранить изменения</button>
                     <button type="button" class="cancel-btn" onclick="openModal('password-modal')">
@@ -519,7 +545,7 @@
         </div>
     </section>
 
-    <!-- Подвал -->
+    
     <div class="footer">
         <button class="nav-button active" data-section="pets" onclick="showSection('pets')">
             <img src="../photos/pet.svg" class="nav-icon" alt="Питомцы">
@@ -590,14 +616,32 @@
     </div>
 
     <!-- Модальное окно смены пароля -->
-    <div id="password-modal" class="modal-overlay">
-        <div class="modal-content">
-            <h3>Смена пароля</h3>
-            <form id="change-password-form" onsubmit="return changePassword(event)">
-                <!-- Форма смены пароля -->
-            </form>
+        <div id="password-modal" class="modal-overlay">
+            <div class="modal-content">
+                <h3>Смена пароля</h3>
+                <form id="change-password-form" onsubmit="return changePassword(event)">
+                    <div class="form-group">
+                        <label>Текущий пароль:</label>
+                        <input type="password" name="old_password" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Новый пароль:</label>
+                        <input type="password" name="new_password" required minlength="6">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Повторите новый пароль:</label>
+                        <input type="password" name="confirm_password" required minlength="6">
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="cancel-btn" onclick="closeModal('password-modal')">Отмена</button>
+                        <button type="submit">Сменить пароль</button>
+                    </div>
+                </form>
+            </div>
         </div>
-    </div>
 
     <div id="delete-confirm-modal" class="modal-overlay">
         <div class="modal-content">
@@ -670,26 +714,7 @@ document.getElementById('delete-confirm-no').addEventListener('click', () => {
   document.getElementById('delete-confirm-modal').style.display = 'none';
 });
 
-function confirmLogout() {
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <h3>Подтверждение выхода</h3>
-            <p>Вы уверены, что хотите выйти из аккаунта?</p>
-            <div class="modal-actions">
-                <button class="confirm-btn" onclick="performLogout()">Да, выйти</button>
-                <button class="cancel-btn" onclick="this.parentElement.parentElement.parentElement.remove()">Отмена</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
-}
 
-function performLogout() {
-    localStorage.removeItem('access_token');
-    window.location.href = 'authorization.html';
-}
 // Модифицированная функция удаления
 async function deletePet(event, petId) {
     event.stopPropagation();
@@ -830,70 +855,86 @@ function getPetIcon(petType) {
     
         // Сохранение профиля
         async function saveProfile(event) {
-            event.preventDefault();
-            const formData = {
-                name: document.getElementById('profile-name').value,
-                email: document.getElementById('profile-email').value
-            };
-    
-            try {
-                const response = await fetch(`${API_URL}/users/me`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(formData)
-                });
-    
-                if (!response.ok) throw new Error(await response.text());
-                
-                alert('Профиль успешно обновлен');
-                await loadProfile();
-            } catch (error) {
-                console.error('Ошибка сохранения:', error);
-                alert(`Ошибка: ${error.message}`);
-            }
+    event.preventDefault();
+    const formData = {
+        name: document.getElementById('profile-name').value,
+        email: document.getElementById('profile-email').value,
+        password: document.getElementById('profile-password').value
+    };
+
+    try {
+        const response = await fetch(`${API_URL}/users/me`, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Ошибка обновления профиля');
         }
+        
+        showToast('Профиль успешно обновлен', 'success');
+        document.getElementById('profile-password').value = ''; // Очистка поля пароля
+        await loadProfile();
+    } catch (error) {
+        console.error('Ошибка сохранения:', error);
+        showToast(error.message, 'error');
+    }
+}
     
         // Смена пароля
-        async function changePassword(event) {
-            event.preventDefault();
-            const formData = new FormData(event.target);
-            const passwords = {
-                old_password: formData.get('old_password'),
-                new_password: formData.get('new_password'),
-                confirm_password: formData.get('confirm_password')
-            };
+        async function changePassword(event) {  
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
     
-            if (passwords.new_password !== passwords.confirm_password) {
-                alert('Новые пароли не совпадают');
-                return;
-            }
+    const passwords = {
+        old_password: formData.get('old_password'),
+        new_password: formData.get('new_password'),
+        confirm_password: formData.get('confirm_password')
+    };
+
+    // Валидация паролей
+    if (passwords.new_password !== passwords.confirm_password) {
+        showToast('Новые пароли не совпадают', 'error');
+        return;
+    }
     
-            try {
-                const response = await fetch(`${API_URL}/users/change-password`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        old_password: passwords.old_password,
-                        new_password: passwords.new_password
-                    })
-                });
-    
-                if (!response.ok) throw new Error(await response.text());
-                
-                alert('Пароль успешно изменен');
-                closeModal('password-modal');
-                event.target.reset();
-            } catch (error) {
-                console.error('Ошибка смены пароля:', error);
-                alert(`Ошибка: ${error.message}`);
-            }
+    if (passwords.new_password.length < 6) {
+        showToast('Пароль должен быть не менее 6 символов', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/users/change-password`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                old_password: passwords.old_password,
+                new_password: passwords.new_password
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Ошибка смены пароля');
         }
+
+        showToast('Пароль успешно изменен', 'success');
+        closeModal('password-modal');
+        form.reset();
+    } catch (error) {
+        console.error('Ошибка смены пароля:', error);
+        showToast(error.message, 'error');
+    }
+}
     
         // Инициализация календаря
         function initCalendar() {
@@ -1026,7 +1067,37 @@ function getPetIcon(petType) {
             localStorage.removeItem('access_token');
             window.location.href = '/pages/authorization.html';
         }
-    
+
+        function confirmLogout() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <h3>Подтверждение выхода</h3>
+            <p>Вы уверены, что хотите выйти из аккаунта?</p>
+            <div class="modal-actions">
+                <button class="confirm-btn" onclick="performLogout()">Да, выйти</button>
+                <button class="cancel-btn" onclick="this.closest('.modal-overlay').remove()">Отмена</button>
+            </div>
+        </div>
+    `;
+
+    // Закрытие по клику вне модального окна
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+
+    document.body.appendChild(modal);
+}
+
+// Функция выполнения выхода
+function performLogout() {
+    localStorage.removeItem('access_token');
+    window.location.href = 'authorization.html'; // Убедитесь, что путь правильный
+}
+        
         // Инициализация при загрузке страницы
         document.addEventListener('DOMContentLoaded', async () => {
             try {

@@ -234,6 +234,18 @@
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
 
+            // Простая проверка заполнения всех полей
+            if (!name || !email || !password) {
+                alert('Все поля обязательны для заполнения!');
+                return;
+            }
+
+            // Валидация email с помощью регулярного выражения
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                alert('Пожалуйста, введите корректный email адрес');
+                return;
+            }
             try {
                 // Отправка запроса на сервер для регистрации
                 const response = await fetch(`${API_URL}/register`, {
