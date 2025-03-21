@@ -14,6 +14,23 @@
 
     <!-- Стили -->
     <style>
+        .calendar-header {
+    display: flex;
+    justify-content: flex-end;
+    padding: 10px 20px;
+}
+
+.fc-event {
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 2px 5px;
+    margin: 2px;
+    font-size: 0.9em;
+}
+
+.fc-daygrid-event-dot {
+    display: none;
+}
         .modal-overlay {
     position: fixed;
     top: 0;
@@ -501,15 +518,11 @@
     <!-- Секция календаря -->
     <section id="calendar-section" class="content-section">
         <div class="cal-device">
-            <header class="cal-week">
-                <div class="cal-weekday">SUN</div>
-                <div class="cal-weekday">MON</div>
-                <div class="cal-weekday">TUE</div>
-                <div class="cal-weekday">WED</div>
-                <div class="cal-weekday">THU</div>
-                <div class="cal-weekday">FRI</div>
-                <div class="cal-weekday">SAT</div>
-            </header>
+            <div class="calendar-header">
+                <button class="create-button" onclick="openCalendarModal()">
+                    + Новое событие
+                </button>
+            </div>
             <div id="calendar"></div>
         </div>
     </section>
@@ -531,7 +544,6 @@
                     <label>Текущий пароль:</label>
                     <input type="password" id="profile-password" name="password" required>
                 </div>
-                <div class="form-actions">
                 <div class="form-actions">
                     <button type="submit">Сохранить изменения</button>
                     <button type="button" class="cancel-btn" onclick="openModal('password-modal')">
@@ -655,8 +667,46 @@
         </div>
       </div>
 
+      <div id="calendar-event-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Новое событие</h3>
+            <form id="event-form" onsubmit="return handleEventSubmit(event)">
+                <div class="form-group">
+                    <label>Тип события:</label>
+                    <select id="event-type" required>
+                        <option value="reminder">Напоминание</option>
+                        <option value="vaccination">Прививка</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Питомец:</label>
+                    <select id="event-pet" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Описание:</label>
+                    <input type="text" id="event-description" required>
+                </div>
+                <div class="form-group">
+                    <label>Дата и время:</label>
+                    <input type="datetime-local" id="event-date" required>
+                </div>
+                <div class="form-group" id="vaccination-fields" style="display: none;">
+                    <label>Следующая дата:</label>
+                    <input type="date" id="next-vaccination-date">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="cancel-btn" onclick="closeModal('calendar-event-modal')">Отмена</button>
+                    <button type="submit">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+      
     <!-- Скрипты -->
-    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js'></script>
+    <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.8/main.min.js'></script>
+    <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/daygrid@6.1.8/main.min.js'></script>
+    <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/interaction@6.1.8/main.min.js'></script>
+    <script src='https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.8/locales/ru.min.js'></script>
 
     <script>
         // Базовый URL API
@@ -667,13 +717,71 @@ let calendar = null; // Экземпляр FullCalendar
 let previousSection = 'pets'; // Текущая активная секция
 let currentPetIdToDelete = null; // ID питомца для удаления
 let deleteResolver = null; // Разрешитель Promise для подтверждения удаления
+function initCalendar() {
+    const calendarEl = document.getElementById('calendar');
+    if (!calendarEl) return;
 
+    // Регистрируем необходимые плагины
+    FullCalendar.registerPlugins([
+        FullCalendarDayGridPlugin,
+        FullCalendarInteractionPlugin
+    ]);
+
+    calendar = new FullCalendar.Calendar(calendarEl, {
+        plugins: [FullCalendarDayGridPlugin, FullCalendarInteractionPlugin],
+        initialView: 'dayGridMonth',
+        locale: 'ru',
+        selectable: true,
+        select: async (info) => {
+            openCalendarModal(info.startStr);
+        },
+        events: async (info, success) => {
+            try {
+                const [remindersRes, vaccinationsRes] = await Promise.all([
+                    fetch(`${API_URL}/reminders?start=${info.startStr}&end=${info.endStr}`, {
+                        headers: { 
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                            'Content-Type': 'application/json'
+                        }
+                    }),
+                    fetch(`${API_URL}/vaccinations?start=${info.startStr}&end=${info.endStr}`, {
+                        headers: { 
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                ]);
+
+                const reminders = await remindersRes.json();
+                const vaccinations = await vaccinationsRes.json();
+
+                const events = [
+                    ...reminders.map(r => ({
+                        title: `⏰ ${r.description} (${r.pet.name})`,
+                        start: r.reminder_date,
+                        allDay: false,
+                        color: '#D2C639'
+                    })),
+                    ...vaccinations.map(v => ({
+                        title: `💉 ${v.name} (${v.pet.name})`,
+                        start: v.date_administered,
+                        allDay: true,
+                        color: '#4CAF50'
+                    }))
+                ];
+
+                success(events);
+            } catch (error) {
+                console.error('Ошибка загрузки событий:', error);
+                success([]);
+            }
+        }
+    });
+    
+    calendar.render();
+}
 // Установка максимальной даты рождения питомца
 document.getElementById('birth-date-input').max = new Date().toISOString().split('T')[0];
-
-// ========================
-// Основные функции приложения
-// ========================
 
 // Проверка авторизации пользователя
 async function checkAuth() {
@@ -706,15 +814,6 @@ async function checkAuth() {
   }
 }
 
-// Перенаправление на страницу авторизации
-function redirectToLogin() {
-  window.location.href = 'authorization.html';
-}
-
-// ========================
-// Управление модальными окнами
-// ========================
-
 // Открытие модального окна
 function openModal(modalId) {
   document.getElementById(modalId).style.display = 'flex';
@@ -744,10 +843,6 @@ document.getElementById('delete-confirm-no').addEventListener('click', () => {
   if (deleteResolver) deleteResolver(false);
   document.getElementById('delete-confirm-modal').style.display = 'none';
 });
-
-// ========================
-// Управление питомцами
-// ========================
 
 // Удаление питомца
 async function deletePet(event, petId) {
@@ -837,10 +932,6 @@ async function loadPets() {
   }
 }
 
-// ========================
-// Вспомогательные функции
-// ========================
-
 // Расчет возраста
 function calculateAge(birthDate) {
   if (!birthDate) return 'Дата рождения не указана';
@@ -885,54 +976,88 @@ function getPetIcon(petType) {
   return icons[petType] || '🐾';
 }
 
-// ========================
-// Управление календарем
-// ========================
+// Новые функции для работы с событиями
+let selectedDate = null;
 
-// Инициализация календаря
-function initCalendar() {
-  const calendarEl = document.getElementById('calendar');
-  if (!calendarEl) return;
-
-  calendar = new FullCalendar.Calendar(calendarEl, {
-    plugins: ['dayGrid'],
-    initialView: 'dayGridMonth',
-    locale: 'ru',
-    events: async (info, success) => {
-      try {
-        const res = await fetch(
-          `${API_URL}/reminders?start=${info.startStr}&end=${info.endStr}`, 
-          {
+async function openCalendarModal(date = null) {
+    selectedDate = date;
+    const petSelect = document.getElementById('event-pet');
+    
+    try {
+        const petsRes = await fetch(`${API_URL}/pets`, {
             headers: { 
-              'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-              'Content-Type': 'application/json'
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                'Content-Type': 'application/json'
             }
-          }
-        );
+        });
+        const pets = await petsRes.json();
         
-        if (!res.ok) throw new Error('Ошибка загрузки напоминаний');
+        petSelect.innerHTML = pets.map(pet => 
+            `<option value="${pet.id}">${pet.name}</option>`
+        ).join('');
         
-        const reminders = await res.json();
-        const events = reminders.map(reminder => ({
-          title: reminder.description,
-          start: reminder.reminder_date,
-          allDay: false
-        }));
+        if(date) {
+            const dateInput = document.getElementById('event-date');
+            const localDate = new Date(date);
+            localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+            dateInput.value = localDate.toISOString().slice(0, 16);
+        }
         
-        success(events);
-      } catch (error) {
-        console.error('Ошибка загрузки событий:', error);
-        success([]);
-      }
+        openModal('calendar-event-modal');
+    } catch (error) {
+        showToast('Ошибка загрузки питомцев', 'error');
     }
-  });
-  
-  calendar.render();
 }
 
-// ========================
-// Управление профилем
-// ========================
+document.getElementById('event-type').addEventListener('change', function() {
+    document.getElementById('vaccination-fields').style.display = 
+        this.value === 'vaccination' ? 'block' : 'none';
+});
+
+async function handleEventSubmit(event) {
+    event.preventDefault();
+    
+    const formData = {
+        type: document.getElementById('event-type').value,
+        pet_id: document.getElementById('event-pet').value,
+        description: document.getElementById('event-description').value,
+        date: document.getElementById('event-date').value,
+        next_date: document.getElementById('next-vaccination-date').value
+    };
+
+    try {
+        const endpoint = formData.type === 'vaccination' 
+            ? `${API_URL}/vaccinations` 
+            : `${API_URL}/reminders`;
+
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                pet_id: formData.pet_id,
+                ...(formData.type === 'vaccination' ? {
+                    name: formData.description,
+                    date_administered: formData.date,
+                    next_date: formData.next_date
+                } : {
+                    description: formData.description,
+                    reminder_date: formData.date
+                })
+            })
+        });
+
+        if (!response.ok) throw new Error('Ошибка сохранения');
+
+        calendar.refetchEvents();
+        closeModal('calendar-event-modal');
+        showToast('Событие сохранено!', 'success');
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
 
 // Загрузка профиля
 async function loadProfile() {
@@ -1036,10 +1161,6 @@ async function changePassword(event) {
   }
 }
 
-// ========================
-// Вспомогательные функции
-// ========================
-
 // Показать уведомление
 function showToast(message, type = 'info') {
   const toast = document.createElement('div');
@@ -1077,39 +1198,6 @@ function showSection(sectionId) {
     sectionId === 'pets' ? 'none' : 'block';
 }
 
-// Выход из системы
-function performLogout() {
-  localStorage.removeItem('access_token');
-  redirectToLogin();
-}
-
-// Подтверждение выхода
-function confirmLogout() {
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <h3>Подтверждение выхода</h3>
-      <p>Вы уверены, что хотите выйти из аккаунта?</p>
-      <div class="modal-actions">
-        <button class="confirm-btn" onclick="performLogout()">Да, выйти</button>
-        <button class="cancel-btn" onclick="this.closest('.modal-overlay').remove()">Отмена</button>
-      </div>
-    </div>
-  `;
-
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      modal.remove();
-    }
-  });
-
-  document.body.appendChild(modal);
-}
-
-// ========================
-// Инициализация приложения
-// ========================
 
 document.addEventListener('DOMContentLoaded', async () => {
   if (!await checkAuth()) return;
@@ -1135,6 +1223,37 @@ document.querySelector('.back-button').addEventListener('click', () => {
   showSection(previousSection);
 });
 
+function performLogout() {
+    // Удаляем все данные авторизации
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    
+    // Перенаправляем на страницу авторизации
+    window.location.href = 'authorization.html';
+}
+
+function confirmLogout() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <h3>Подтверждение выхода</h3>
+            <p>Вы уверены, что хотите выйти из аккаунта?</p>
+            <div class="modal-actions">
+                <button class="confirm-btn" onclick="performLogout()">Да, выйти</button>
+                <button class="cancel-btn" onclick="this.closest('.modal-overlay').remove()">Отмена</button>
+            </div>
+        </div>
+    `;
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+    
+    document.body.appendChild(modal);
+}
 // Обработчик отправки формы питомца
 async function handlePetSubmit(event) {
   event.preventDefault();
