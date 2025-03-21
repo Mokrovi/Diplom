@@ -8,6 +8,113 @@
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
+        .animated-input {
+    transition: all 0.3s ease;
+    transform-origin: left center;
+}
+
+.animated-input:focus {
+    transform: scale(1.02);
+    box-shadow: 0 0 12px rgba(210, 198, 57, 0.2);
+}
+
+@keyframes slideIn {
+    0% {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.vax-help-text {
+    font-size: 0.85em;
+    color: #7f8db0;
+    margin-top: 4px;
+    animation: slideIn 0.3s ease;
+}
+        .vax-checkbox {
+    position: relative;
+    margin: 15px 0;
+    padding-left: 35px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.vax-checkbox input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+}
+
+.vax-checkmark {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 24px;
+    width: 24px;
+    background-color: #1a2a4f;
+    border: 2px solid #D2C639;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+}
+
+.vax-checkbox:hover .vax-checkmark {
+    transform: scale(1.1);
+    box-shadow: 0 0 8px rgba(210, 198, 57, 0.3);
+}
+
+.vax-checkbox input:checked ~ .vax-checkmark {
+    background-color: #D2C639;
+}
+
+.vax-checkmark:after {
+    content: "";
+    position: absolute;
+    display: none;
+    left: 7px;
+    top: 3px;
+    width: 7px;
+    height: 12px;
+    border: solid #213568;
+    border-width: 0 3px 3px 0;
+    transform: rotate(45deg);
+}
+
+.vax-checkbox input:checked ~ .vax-checkmark:after {
+    display: block;
+    animation: checkAnim 0.4s ease;
+}
+
+.vax-nextdate-container {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: translateY(-10px);
+}
+
+.vax-nextdate-container.visible {
+    max-height: 100px;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+@keyframes checkAnim {
+    0% { transform: scale(0) rotate(45deg); }
+    50% { transform: scale(1.2) rotate(45deg); }
+    100% { transform: scale(1) rotate(45deg); }
+}
+
+.vax-repeated-label {
+    font-weight: 600;
+    color: #D2C639;
+    margin-left: 8px;
+}
         /* Глобальные стили */
         * {
             margin: 0;
@@ -524,7 +631,12 @@
                         </div>
                         <div class="form-group">
                             <label>Дата рождения:</label>
-                            <input type="date" v-model="editPet.birth_date">
+                            <input 
+                                type="date" 
+                                v-model="editPet.birth_date"
+                                :max="new Date().toISOString().split('T')[0]"
+                                required
+                            >
                         </div>
                         <div class="form-group">
                             <label>Порода:</label>
@@ -575,7 +687,7 @@
                     </div>
                 </div>
                 
-                <!-- Вставить сюда -->
+                
                 <div v-if="lastVaccination" class="info-item">
                     <div class="info-label">{{ lastVaccination.name }}</div>
                     <div class="info-value">
@@ -604,7 +716,7 @@
                         </div>
                     </div>
                     
-                    <!-- Вставить сюда -->
+                   
                     <div class="feeding-schedule">
                         <div v-if="lastFeeding" class="feeding-time">
                             <i class="fas fa-clock time-icon"></i>
@@ -751,22 +863,31 @@ const VaccinationModal = {
                 >
             </div>
             <div class="form-group">
-                <label>Повторяемая:</label>
+            <label class="vax-checkbox">
                 <input 
                     type="checkbox" 
                     v-model="newData.repeated"
                     @change="handleRepeatedChange"
                 >
-            </div>
-            <div class="form-group" v-if="newData.repeated">
-                <label>Следующая дата:</label>
-                <input 
-                    type="date" 
-                    v-model="newData.next_date"
-                    :min="newData.date_administered"
-                    :required="newData.repeated"
-                >
-            </div>
+                <span class="vax-checkmark"></span>
+                <span class="vax-repeated-label">Повторяемая прививка?</span>
+                <div class="vax-help-text">(отметьте если требуется повторная вакцинация)</div>
+            </label>
+        </div>
+
+                <div class="vax-nextdate-container" :class="{visible: newData.repeated}">
+                    <div class="form-group">
+                        <label>Следующая дата:</label>
+                        <input 
+                            type="date" 
+                            v-model="newData.next_date"
+                            :min="newData.date_administered"
+                            :required="newData.repeated"
+                            class="animated-input"
+                        >
+                    </div>
+                </div>
+            
             <div class="actions">
                 <button @click="$emit('close')" class="btn btn-secondary">Отмена</button>
                 <button @click="handleSave" class="btn btn-primary">Сохранить</button>
