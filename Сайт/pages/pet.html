@@ -732,47 +732,93 @@
     }
 };
     
-    const VaccinationModal = { 
-        template: `
-            <div>
-                <h3>Новая прививка</h3>
-                <div class="form-group">
-                    <label>Название:</label>
-                    <input type="text" v-model="newData.name" required>
-                </div>
-                <div class="form-group">
-                    <label>Дата введения:</label>
-                    <input type="date" v-model="newData.date_administered" required>
-                </div>
-                <div class="form-group">
-                    <label>Следующая дата:</label>
-                    <input type="date" v-model="newData.next_date">
-                </div>
-                <div class="actions">
-                    <button @click="$emit('close')" class="btn btn-secondary">Отмена</button>
-                    <button @click="handleSave" class="btn btn-primary">Сохранить</button>
-                </div>
+const VaccinationModal = { 
+    template: `
+        <div>
+            <h3>Новая прививка</h3>
+            <div class="form-group">
+                <label>Название:</label>
+                <input type="text" v-model="newData.name" required>
             </div>
-        `,
-        data() {
-            return { 
-                newData: {
-                    name: '',
-                    date_administered: new Date().toISOString().split('T')[0],
-                    next_date: null
-                } 
+            <div class="form-group">
+                <label>Дата введения:</label>
+                <input 
+                    type="date" 
+                    v-model="newData.date_administered" 
+                    :max="maxDate"
+                    required
+                    @change="updateNextDateMin"
+                >
+            </div>
+            <div class="form-group">
+                <label>Повторяемая:</label>
+                <input 
+                    type="checkbox" 
+                    v-model="newData.repeated"
+                    @change="handleRepeatedChange"
+                >
+            </div>
+            <div class="form-group" v-if="newData.repeated">
+                <label>Следующая дата:</label>
+                <input 
+                    type="date" 
+                    v-model="newData.next_date"
+                    :min="newData.date_administered"
+                    :required="newData.repeated"
+                >
+            </div>
+            <div class="actions">
+                <button @click="$emit('close')" class="btn btn-secondary">Отмена</button>
+                <button @click="handleSave" class="btn btn-primary">Сохранить</button>
+            </div>
+        </div>
+    `,
+    data() {
+        return {
+            newData: {
+                name: '',
+                date_administered: new Date().toISOString().split('T')[0],
+                next_date: null,
+                repeated: false
+            },
+            maxDate: new Date().toISOString().split('T')[0]
+        }
+    },
+    methods: {
+        updateNextDateMin() {
+            if(this.newData.next_date < this.newData.date_administered) {
+                this.newData.next_date = this.newData.date_administered;
             }
         },
-        methods: {
-            handleSave() {
-                if(this.newData.name.trim() && this.newData.date_administered) {
-                    this.$emit('save', this.newData);
-                } else {
-                    alert('Заполните обязательные поля');
-                }
+        handleRepeatedChange() {
+            if(!this.newData.repeated) {
+                this.newData.next_date = null;
             }
+        },
+        handleSave() {
+            const errors = [];
+            
+            if(!this.newData.name.trim()) {
+                errors.push('Укажите название прививки');
+            }
+            
+            if(this.newData.repeated && !this.newData.next_date) {
+                errors.push('Для повторяемых прививок укажите следующую дату');
+            }
+            
+            if(this.newData.next_date && this.newData.next_date < this.newData.date_administered) {
+                errors.push('Следующая дата не может быть раньше даты введения');
+            }
+            
+            if(errors.length > 0) {
+                alert(errors.join('\n'));
+                return;
+            }
+            
+            this.$emit('save', this.newData);
         }
-    };
+    }
+};      
 
     const FeedingModal = { 
     template: `

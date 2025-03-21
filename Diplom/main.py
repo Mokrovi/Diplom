@@ -1,10 +1,10 @@
 # Импорт необходимых модулей
 from typing import List, Optional, Literal
 from datetime import date, datetime, timedelta
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator, computed_field
 from sqlalchemy import (
     Column, Integer, String, Float, Date, DateTime,
-    ForeignKey, Boolean, Table, select, delete
+    ForeignKey, Boolean, Table, select, delete, func
 )
 from sqlalchemy.orm import relationship, declarative_base, selectinload
 from sqlalchemy.ext.asyncio import (
@@ -66,17 +66,31 @@ class User(Base):
 class Pet(Base):
     __tablename__ = "pets"
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(50), index=True)
+    name = Column(String(50))
     type = Column(String(50))
     breed = Column(String(50), nullable=True)
     birth_date = Column(Date, nullable=True)
     gender = Column(String(10))
-    age = Column(Integer)
+
+    health_records = relationship("HealthRecord", back_populates="pet")
+    vaccinations = relationship("Vaccination", back_populates="pet")
+    reminders = relationship("Reminder", back_populates="pet")
+    feeding_schedules = relationship("FeedingSchedule", back_populates="pet")
     users = relationship("User", secondary=user_pet_association, back_populates="pets")
-    health_records = relationship("HealthRecord", back_populates="pet", cascade="all, delete")
-    vaccinations = relationship("Vaccination", back_populates="pet", cascade="all, delete")
-    reminders = relationship("Reminder", back_populates="pet", cascade="all, delete")
-    feeding_schedules = relationship("FeedingSchedule", back_populates="pet", cascade="all, delete")
+
+
+class PetBase(BaseModel):
+    name: str = Field(..., max_length=50)
+    type: str = Field(..., max_length=50)
+    breed: Optional[str] = Field(None, max_length=50)
+    birth_date: date = Field(...)  # Теперь обязательное поле
+    gender: Literal["male", "female", "other"]
+
+    @field_validator('birth_date')
+    def validate_birth_date(cls, value):
+        if value > date.today():
+            raise ValueError("Дата рождения не может быть в будущем")
+        return value
 
 
 class HealthRecord(Base):
@@ -146,15 +160,6 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
-class PetBase(BaseModel):
-    name: str = Field(..., max_length=50)
-    type: str = Field(..., max_length=50)
-    breed: Optional[str] = Field(None, max_length=50)
-    birth_date: Optional[date] = None
-    gender: Literal["male", "female", "other"]
-    age: int = Field(..., gt=0)
-
-
 class PetResponse(BaseModel):
     id: int
     name: str
@@ -162,7 +167,20 @@ class PetResponse(BaseModel):
     breed: Optional[str]
     birth_date: Optional[date]
     gender: str
-    age: int
+
+    @computed_field
+    @property
+    def months(self) -> Optional[int]:
+        if self.birth_date is None:
+            return None
+        return calculate_age(self.birth_date)
+
+
+class PetResponseExtended(PetResponse):
+    last_weight: Optional[float] = None
+    active_reminders_count: int = 0
+    vaccinations_count: int = 0
+    owners_count: int = 0
 
     class Config:
         from_attributes = True
@@ -377,35 +395,45 @@ async def update_user_profile(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@field_validator('months')
+def validate_months(cls, value):
+    if value is not None and value < 0:
+        raise ValueError("Возраст не может быть отрицательным")
+    return value
+
+
 @app.post("/pets", response_model=PetResponse)
 async def create_pet(
-        pet: PetBase,
-        session: SessionDep,
-        current_user: Annotated[User, Depends(get_current_user)]
+    pet: PetBase,
+    session: SessionDep,
+    current_user: Annotated[User, Depends(get_current_user)]
 ):
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Неверный токен")
-
     try:
-        # Создаем нового питомца
-        new_pet = Pet(**pet.model_dump())
-        session.add(new_pet)
-        await session.flush()  # Получаем ID нового питомца
+        db_pet = Pet(
+            name=pet.name,
+            type=pet.type,
+            breed=pet.breed,
+            birth_date=pet.birth_date,
+            gender=pet.gender
+        )
 
-        # Явно добавляем связь в ассоциативную таблицу
+        session.add(db_pet)
+        await session.flush()
+
         stmt = user_pet_association.insert().values(
             user_id=current_user.id,
-            pet_id=new_pet.id
+            pet_id=db_pet.id
         )
         await session.execute(stmt)
 
         await session.commit()
-        await session.refresh(new_pet)
-        return new_pet
+        await session.refresh(db_pet)
+        return db_pet
+
     except Exception as e:
         await session.rollback()
         raise HTTPException(
-            status_code=422,
+            status_code=400,
             detail=f"Ошибка создания питомца: {str(e)}"
         )
 
@@ -446,17 +474,55 @@ async def delete_pet(
         raise HTTPException(status_code=500, detail=f"Ошибка удаления: {str(e)}")
 
 
-@app.get("/pets", response_model=List[PetResponse])
+@app.get("/pets", response_model=List[PetResponseExtended])
 async def get_user_pets(
-        session: SessionDep,
-        current_user: Annotated[User, Depends(get_current_user)]
+    session: SessionDep,
+    current_user: Annotated[User, Depends(get_current_user)]
 ):
-    result = await session.execute(
-        select(Pet)
-        .join(user_pet_association, Pet.id == user_pet_association.c.pet_id)
-        .where(user_pet_association.c.user_id == current_user.id)
+    # Подзапрос для последнего веса с явной корреляцией
+    last_weight_subquery = (
+        select(HealthRecord.weight)
+        .where(HealthRecord.pet_id == Pet.id)
+        .order_by(HealthRecord.record_date.desc())
+        .limit(1)
+        .correlate(Pet)  # Явно указываем корреляцию
+        .scalar_subquery()
+        .label("last_weight")
     )
-    return result.scalars().all()
+
+    stmt = (
+        select(
+            Pet,
+            last_weight_subquery,
+            func.count(Reminder.id).filter(Reminder.is_completed == False).label("active_reminders_count"),
+            func.count(Vaccination.id).label("vaccinations_count"),
+            func.count(user_pet_association.c.user_id).label("owners_count")
+        )
+        .join(user_pet_association, Pet.id == user_pet_association.c.pet_id)
+        .outerjoin(Reminder, Pet.id == Reminder.pet_id)
+        .outerjoin(Vaccination, Pet.id == Vaccination.pet_id)
+        .where(user_pet_association.c.user_id == current_user.id)
+        .group_by(Pet.id)
+    )
+
+    result = await session.execute(stmt)
+    pets = result.all()
+
+    return [
+        {
+            "id": pet.Pet.id,
+            "name": pet.Pet.name,
+            "type": pet.Pet.type,
+            "breed": pet.Pet.breed,
+            "birth_date": pet.Pet.birth_date,
+            "gender": pet.Pet.gender,
+            "last_weight": pet.last_weight,
+            "active_reminders_count": pet.active_reminders_count,
+            "vaccinations_count": pet.vaccinations_count,
+            "owners_count": pet.owners_count
+        }
+        for pet in pets
+    ]
 
 
 @app.post("/pets/{pet_id}/users/{user_id}")
@@ -668,6 +734,16 @@ async def create_health_record(
     await session.commit()
     await session.refresh(new_record)
     return new_record
+
+
+def calculate_age(birth_date: date) -> int:
+    if birth_date is None:
+        return None
+    today = date.today()
+    months = (today.year - birth_date.year) * 12 + (today.month - birth_date.month)
+    if today.day < birth_date.day:
+        months -= 1
+    return months
 
 
 @app.post("/pets/{pet_id}/vaccinations", response_model=VaccinationResponse)
